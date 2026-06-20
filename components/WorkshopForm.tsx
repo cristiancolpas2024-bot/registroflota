@@ -296,7 +296,6 @@ export const WorkshopForm: React.FC<WorkshopFormProps> = ({ isOpen, onClose, onS
                       type="file"
                       accept="image/*"
                       multiple
-                      capture="environment"
                       onChange={(e) => handleFileChange(e, setEvidence1Files)}
                       className="hidden"
                       id="evidence1"
@@ -334,7 +333,6 @@ export const WorkshopForm: React.FC<WorkshopFormProps> = ({ isOpen, onClose, onS
                       type="file"
                       accept="image/*"
                       multiple
-                      capture="environment"
                       onChange={(e) => handleFileChange(e, setEvidence2Files)}
                       className="hidden"
                       id="evidence2"
