@@ -24,37 +24,40 @@ import { SparePartRecord } from '../types';
 import { fetchSparePartsFromSheet, submitSparePartInspection } from '../services/sheetService';
 
 export const SPARE_PARTS_PROVIDERS = ['Renting Colombia', 'Navitrans', 'ALD'];
-export const SPARE_PARTS_WORKSHOPS = ['ELECTRONIC', 'VEHIPESA', 'TODOFIBRA'];
+export const SPARE_PARTS_WORKSHOPS = ['ELECTRONIC', 'COUNTRY TRUCKS', 'VEHIPESA', 'TODOFIBRA'];
+
+const ELECTRONIC_ITEMS = [
+  { repuesto: "Cinturones de seguridad", minimo: 4, und: "UND" },
+  { repuesto: "Motor de arranque", minimo: 3, und: "UND" },
+  { repuesto: "Kit de embrague", minimo: 2, und: "UND" },
+  { repuesto: "Alternador", minimo: 2, und: "UND" },
+  { repuesto: "Caja de dirección", minimo: 1, und: "UND" },
+  { repuesto: "Selector de cambios", minimo: 3, und: "UND" },
+  { repuesto: "Espejo auxiliar", minimo: 4, und: "UND" },
+  { repuesto: "Espejo principal (Juego izquierdo y derecho)", minimo: 4, und: "JUEGO" },
+  { repuesto: "Cocuyos de direccionales", minimo: 6, und: "UND" },
+  { repuesto: "Guayas de puerta externa", minimo: 3, und: "UND" },
+  { repuesto: "Juego bandas de freno con suncho", minimo: 3, und: "JUEGO" },
+  { repuesto: "Tapa combustible", minimo: 4, und: "UND" },
+  { repuesto: "Manija elevavidrios", minimo: 6, und: "UND" },
+  { repuesto: "Racor de aire", minimo: 6, und: "UND" },
+  { repuesto: "Cámara de aire (juego delantera y trasera)", minimo: 3, und: "JUEGO" },
+  { repuesto: "Pito principal", minimo: 4, und: "UND" },
+  { repuesto: "Alarma de reversa", minimo: 4, und: "UND" },
+  { repuesto: "Bombillo farola", minimo: 24, und: "UND" },
+  { repuesto: "Bombillo 1 filamento", minimo: 24, und: "UND" },
+  { repuesto: "Bombillo 2 filamentos", minimo: 24, und: "UND" },
+  { repuesto: "Fusibles (varios amperajes)", minimo: 24, und: "UND" },
+  { repuesto: "Stop (juego izquierdo y derecho)", minimo: 3, und: "PAR" },
+  { repuesto: "Farolas (juego izquierdo y derecho)", minimo: 3, und: "PAR" },
+  { repuesto: "Switch de encendido", minimo: 3, und: "UND" },
+  { repuesto: "Buje de muelle (juego delantero y trasero)", minimo: 3, und: "JUEGO" },
+  { repuesto: "Juego Plumillas", minimo: 6, und: "PAR" }
+];
 
 export const STOCK_POR_TALLER: Record<string, { repuesto: string; minimo: number; und: string }[]> = {
-  "ELECTRONIC": [
-    { repuesto: "Cinturones de seguridad", minimo: 4, und: "UND" },
-    { repuesto: "Motor de arranque", minimo: 3, und: "UND" },
-    { repuesto: "Kit de embrague", minimo: 2, und: "UND" },
-    { repuesto: "Alternador", minimo: 2, und: "UND" },
-    { repuesto: "Caja de dirección", minimo: 1, und: "UND" },
-    { repuesto: "Selector de cambios", minimo: 3, und: "UND" },
-    { repuesto: "Espejo auxiliar", minimo: 4, und: "UND" },
-    { repuesto: "Espejo principal (Juego izquierdo y derecho)", minimo: 4, und: "JUEGO" },
-    { repuesto: "Cocuyos de direccionales", minimo: 6, und: "UND" },
-    { repuesto: "Guayas de puerta externa", minimo: 3, und: "UND" },
-    { repuesto: "Juego bandas de freno con suncho", minimo: 3, und: "JUEGO" },
-    { repuesto: "Tapa combustible", minimo: 4, und: "UND" },
-    { repuesto: "Manija elevavidrios", minimo: 6, und: "UND" },
-    { repuesto: "Racor de aire", minimo: 6, und: "UND" },
-    { repuesto: "Cámara de aire (juego delantera y trasera)", minimo: 3, und: "JUEGO" },
-    { repuesto: "Pito principal", minimo: 4, und: "UND" },
-    { repuesto: "Alarma de reversa", minimo: 4, und: "UND" },
-    { repuesto: "Bombillo farola", minimo: 24, und: "UND" },
-    { repuesto: "Bombillo 1 filamento", minimo: 24, und: "UND" },
-    { repuesto: "Bombillo 2 filamentos", minimo: 24, und: "UND" },
-    { repuesto: "Fusibles (varios amperajes)", minimo: 24, und: "UND" },
-    { repuesto: "Stop (juego izquierdo y derecho)", minimo: 3, und: "PAR" },
-    { repuesto: "Farolas (juego izquierdo y derecho)", minimo: 3, und: "PAR" },
-    { repuesto: "Switch de encendido", minimo: 3, und: "UND" },
-    { repuesto: "Buje de muelle (juego delantero y trasero)", minimo: 3, und: "JUEGO" },
-    { repuesto: "Juego Plumillas", minimo: 6, und: "PAR" }
-  ],
+  "ELECTRONIC": ELECTRONIC_ITEMS,
+  "COUNTRY TRUCKS": ELECTRONIC_ITEMS,
   "VEHIPESA": [
     { repuesto: "Manija de puerta externa (juego izquierda y derecha)", minimo: 3, und: "JUEGO" },
     { repuesto: "Guayas de puerta externa", minimo: 3, und: "UND" },
