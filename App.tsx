@@ -48,6 +48,7 @@ import ControlTowerModule from './components/ControlTowerModule';
 import FleetStandardModule from './components/FleetStandardModule';
 import ExecutiveAuditDashboard from './components/ExecutiveAuditDashboard';
 import CalibrationVisuals from './components/CalibrationVisuals';
+import SparePartsModule from './components/SparePartsModule';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, ReferenceLine, LabelList
@@ -92,11 +93,11 @@ import {
   RefreshCw, Users, Truck, Search, Shield, ShieldCheck, Gavel, Menu, LogOut, Loader2, 
   Building2, ListFilter, CalendarDays, ClipboardList, Sparkles, Droplets, 
   Disc, Store, Gauge, Plus, History, Filter, Hash, Calendar, Clock, MapPin,
-  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronDown, ChevronUp, Wrench, Lock, X, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap
+  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronDown, ChevronUp, Wrench, Lock, X, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap, Package
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres';
-type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad';
+type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'repuestos';
 
 function getCachedData<T>(key: string, defaultValue: T): T {
   try {
@@ -856,6 +857,7 @@ const App: React.FC = () => {
                       {[
                          { id: 'kilometrajes', label: 'Kilometrajes', icon: <Gauge size={18}/> },
                          { id: 'novedades', label: 'Novedades', icon: <ClipboardList size={18}/> },
+                         { id: 'repuestos', label: 'Repuestos', icon: <Package size={18}/> },
                          { id: 'limpieza', label: 'Limpieza 5S', icon: <Sparkles size={18}/> },
                          { id: 'visitas', label: 'Visitas a Taller', icon: <Store size={18}/> },
                          { id: 'lavados', label: 'Lavados', icon: <Droplets size={18}/> },
@@ -964,6 +966,10 @@ const App: React.FC = () => {
 
           {activeView === 'checklist' && (
             <CheckListModule checkLists={checkLists} />
+          )}
+
+          {activeView === 'repuestos' && (
+            <SparePartsModule />
           )}
 
           {activeView === 'rendimiento' && (

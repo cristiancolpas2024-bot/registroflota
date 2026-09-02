@@ -431,3 +431,33 @@ export interface AuditMasterVehicle {
   cd: string;
 }
 
+export interface SparePartRecord {
+  id: string;
+  fecha: string;
+  inspector: string;
+  proveedor: string;
+  taller: string;
+  repuesto: string;
+  cantidad: number;
+  minimo: number;
+  und: string;
+  estado: string;
+  observacion: string;
+  evidencia?: string;
+}
+
+export interface SparePartInspectionPayload {
+  fecha: string;
+  inspector: string;
+  proveedor: string;
+  taller: string;
+  items: {
+    repuesto: string;
+    cantidad: number;
+    minimo: number;
+    und: string;
+    observacion?: string;
+  }[];
+  evidencia?: string;
+}
+

@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit } from '../types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, SparePartRecord, SparePartInspectionPayload } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec'; 
@@ -7,6 +7,7 @@ const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbze5D1_
 const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
 const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
 const GOOGLE_SCRIPT_AUDIT_URL = 'https://script.google.com/macros/s/AKfycbxSrmZSoQp1l98M3Hcfktl31gel3ynU2eVT2d1_IOg0UKCRVJQVCTKwSmMjZ54EORB1-w/exec';
+export const SPARE_PARTS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxztSeQFSRD3Ae794Aiqs-MvXsYB5Ylfcu4ny4EJtpZqV0rB7lJBrfjnL7gfD2uWGnW/exec';
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
@@ -15,6 +16,8 @@ const BASE_URL_MASTER = `https://docs.google.com/spreadsheets/d/${REAL_MASTER_ID
 // HOJA OPERATIVA / BACKEND
 const BACKEND_DOC_ID = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
 const BASE_URL_BACKEND = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv`;
+export const SPARE_PARTS_DOC_ID = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
+export const SPARE_PARTS_GID = '2062393449';
 
 const CORRECTIVES_DOC_ID = '1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0';
 const BASE_URL_CORRECTIVES = `https://docs.google.com/spreadsheets/d/${CORRECTIVES_DOC_ID}/export?format=csv`;
@@ -2216,6 +2219,88 @@ const processAuditRows = (rows: any[][]): AuditRecord[] => {
         noveltyObservation: cleanSheetValue(row[75]) || '',
       };
     });
+};
+
+/**
+ * MÓDULO REPUESTOS (Hoja REPUESTO - GID 2062393449)
+ * Inspección de stock de repuestos en talleres
+ */
+export const fetchSparePartsFromSheet = async (): Promise<SparePartRecord[]> => {
+  try {
+    const rows = await fetchDataFromGAS(SPARE_PARTS_DOC_ID, 'REPUESTO', SPARE_PARTS_SCRIPT_URL);
+    if (!rows || rows.length < 2) {
+      return fetchSparePartsFromSheetCSV();
+    }
+    return processSparePartRows(rows);
+  } catch (e) {
+    console.warn("GAS fetch spare parts failed, attempting CSV fallback:", e);
+    return fetchSparePartsFromSheetCSV();
+  }
+};
+
+const fetchSparePartsFromSheetCSV = async (): Promise<SparePartRecord[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${SPARE_PARTS_DOC_ID}/export?format=csv&gid=${SPARE_PARTS_GID}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: false,
+        skipEmptyLines: 'greedy',
+        complete: (results) => {
+          const rows = results.data as any[][];
+          if (!rows || rows.length < 2) { resolve([]); return; }
+          resolve(processSparePartRows(rows));
+        },
+        error: () => resolve([])
+      });
+    });
+  } catch (e) {
+    console.error("Error fetching spare parts CSV:", e);
+    return [];
+  }
+};
+
+const processSparePartRows = (rows: any[][]): SparePartRecord[] => {
+  return rows.slice(1)
+    .filter(row => row && (cleanSheetValue(row[4]) || cleanSheetValue(row[0])))
+    .map((row, i): SparePartRecord => {
+      const cantidad = parseFloat(cleanSheetValue(row[5])) || 0;
+      const minimo = parseFloat(cleanSheetValue(row[6])) || 0;
+      const rawEstado = cleanSheetValue(row[8]).toUpperCase();
+      const estado = rawEstado || (cantidad < minimo ? 'ALERTA' : 'OK');
+
+      return {
+        id: `spare-${i}-${cleanSheetValue(row[3])}-${cleanSheetValue(row[4])}`,
+        fecha: parseFlexibleDate(row[0]),
+        inspector: cleanSheetValue(row[1]),
+        proveedor: cleanSheetValue(row[2]),
+        taller: cleanSheetValue(row[3]),
+        repuesto: cleanSheetValue(row[4]),
+        cantidad,
+        minimo,
+        und: cleanSheetValue(row[7]) || 'UND',
+        estado,
+        observacion: cleanSheetValue(row[9]),
+        evidencia: cleanSheetValue(row[10])
+      };
+    });
+};
+
+export const submitSparePartInspection = async (payload: SparePartInspectionPayload): Promise<boolean> => {
+  try {
+    const dataToSend = {
+      ...payload,
+      docId: SPARE_PARTS_DOC_ID
+    };
+    const result = await sendToGAS({ method: 'POST_REPUESTO_INSPECCION', data: dataToSend }, SPARE_PARTS_SCRIPT_URL);
+    return result === true || (result && (result as any).status === 'success');
+  } catch (error) {
+    console.error("Error submitting spare part inspection:", error);
+    return false;
+  }
 };
 
 
