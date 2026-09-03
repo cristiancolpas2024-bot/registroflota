@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, FleetStandardAudit } from './types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, FleetStandardAudit, NoveltyReport } from './types';
 import DocumentCard from './components/DocumentCard';
 import DocumentViewer from './components/DocumentViewer';
 import DriverStats from './components/DriverStats';
@@ -49,6 +49,7 @@ import FleetStandardModule from './components/FleetStandardModule';
 import ExecutiveAuditDashboard from './components/ExecutiveAuditDashboard';
 import CalibrationVisuals from './components/CalibrationVisuals';
 import SparePartsModule from './components/SparePartsModule';
+import NoveltyReportModule from './components/NoveltyReportModule';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, ReferenceLine, LabelList
@@ -85,7 +86,8 @@ import {
   fetchControlTowerFromSheet,
   fetchAuditRecordsFromSheet,
   fetchAvailabilitySummaryFromSheet,
-  fetchFleetStandardAuditFromSheet
+  fetchFleetStandardAuditFromSheet,
+  fetchNoveltyReportsFromSheet
 } from './services/sheetService';
 
 import { normalizePlate, normalizeStr, getWeekNumber } from './utils';
@@ -158,6 +160,7 @@ const App: React.FC = () => {
   const [auditRecords, setAuditRecords] = useState<AuditRecord[]>(() => getCachedData('auditRecords', []));
   const [fleetStandardAuditRecords, setFleetStandardAuditRecords] = useState<FleetStandardAudit[]>(() => getCachedData('fleetStandardAuditRecords', []));
   const [auditMasterVehicles, setAuditMasterVehicles] = useState<AuditMasterVehicle[]>(() => getCachedData('auditMasterVehicles', []));
+  const [noveltyReports, setNoveltyReports] = useState<NoveltyReport[]>(() => getCachedData('noveltyReports', []));
 
   // UI States
   const [viewDoc, setViewDoc] = useState<{ url: string | string[] | {url: string, label?: string}[], title: string } | null>(null);
@@ -262,6 +265,11 @@ const App: React.FC = () => {
         fn: () => import('./services/sheetService').then(m => m.fetchFleetBaseData()), 
         set: setFleetBase, 
         key: 'fleetBase' 
+      },
+      {
+        fn: fetchNoveltyReportsFromSheet,
+        set: setNoveltyReports,
+        key: 'noveltyReports'
       }
     ];
 
@@ -1382,179 +1390,16 @@ const App: React.FC = () => {
           )}
 
           {activeView === 'novedades' && (
-            <div className="max-w-7xl mx-auto space-y-8 pb-20">
-               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div className="space-y-1">
-                    <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-4">
-                      <ClipboardList size={40} className="text-indigo-600" /> Gestión de Novedades
-                    </h2>
-                    <p className="text-[11px] text-slate-400 font-black uppercase tracking-[0.3em] ml-14">Control mensual de operaciones de taller</p>
-                  </div>
-                  
-                  <div className="flex flex-wrap items-center gap-4">
-                    <div className="flex bg-white p-1 rounded-xl border border-slate-100 shadow-sm">
-                      <button 
-                        onClick={() => setReportViewMode('grid')}
-                        className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${reportViewMode === 'grid' ? 'bg-[#0f172a] text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <LayoutGrid size={12} /> Cuadrícula
-                        </div>
-                      </button>
-                      <button 
-                        onClick={() => setReportViewMode('table')}
-                        className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${reportViewMode === 'table' ? 'bg-[#0f172a] text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <ListFilter size={12} /> Tabla
-                        </div>
-                      </button>
-                    </div>
-
-                    {/* Filtros CD, Contratista y Origen */}
-                    <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-2">
-                      <select 
-                        className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-[9px] font-black uppercase outline-none focus:border-indigo-500"
-                        value={filterCd}
-                        onChange={e => setFilterCd(e.target.value)}
-                      >
-                        <option value="all">TODOS LOS CD</option>
-                        {uniqueCds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
-                      </select>
-                      <select 
-                        className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-[9px] font-black uppercase outline-none focus:border-indigo-500"
-                        value={filterContractor}
-                        onChange={e => setFilterContractor(e.target.value)}
-                      >
-                        <option value="all">TODOS LOS CONTRATISTAS</option>
-                        {uniqueContractors.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                      <select 
-                        className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-[9px] font-black uppercase outline-none focus:border-indigo-500"
-                        value={filterSource}
-                        onChange={e => setFilterSource(e.target.value)}
-                      >
-                        <option value="all">TODOS LOS ORIGENES</option>
-                        {uniqueSources.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-
-                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4">
-                      <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-                        <CalendarDays size={16} className="text-indigo-600" />
-                        <div className="flex flex-col">
-                          <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">PERIODO MENSUAL</span>
-                          <div className="flex items-center gap-2">
-                            <select 
-                              className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer"
-                              value="MENSUAL"
-                              disabled
-                            >
-                              <option value="MENSUAL">MENSUAL</option>
-                            </select>
-                            <span className="text-slate-300">|</span>
-                            <select 
-                              className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer"
-                              value={selectedMonth}
-                              onChange={e => setSelectedMonth(e.target.value)}
-                            >
-                              <option value="TODOS">TODOS</option>
-                              {['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'].map(m => (
-                                <option key={m} value={m}>{m}</option>
-                              ))}
-                            </select>
-                            <span className="text-slate-300">|</span>
-                            <select 
-                              className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer"
-                              value={selectedYear}
-                              onChange={e => setSelectedYear(parseInt(e.target.value))}
-                            >
-                              {[2024, 2025, 2026, 2027].map(y => (
-                                <option key={y} value={y}>{y}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <button 
-                      onClick={() => setShowReportForm(true)}
-                      className="flex items-center gap-3 px-8 py-4 bg-[#0f172a] text-white rounded-3xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 transition-all"
-                    >
-                      <Plus size={20}/> Crear Novedad
-                    </button>
-                  </div>
-               </div>
-
-               {reportViewMode === 'table' ? (
-                  <div className="bg-white rounded-[2rem] border border-slate-200 shadow-lg overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="bg-slate-50 border-b border-slate-200 text-[8px] uppercase tracking-widest text-slate-500 font-black">
-                            <th className="p-4">Fecha</th>
-                            <th className="p-4">Placa</th>
-                            <th className="p-4">Tipo</th>
-                            <th className="p-4">Taller</th>
-                            <th className="p-4">Estado</th>
-                            <th className="p-4">Días</th>
-                            <th className="p-4 text-right">Acciones</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 text-[10px] font-medium text-slate-700">
-                          {filteredReports.map(r => (
-                            <tr key={r.id} className="hover:bg-slate-50 transition-colors">
-                              <td className="p-4 font-black">{r.date}</td>
-                              <td className="p-4">
-                                <span className="bg-slate-900 px-2 py-1 rounded text-white font-mono font-black tracking-tighter">
-                                  {r.plate}
-                                </span>
-                              </td>
-                              <td className="p-4 uppercase font-black text-slate-400 truncate max-w-[200px]">{r.novelty}</td>
-                              <td className="p-4 uppercase font-black text-slate-600">{r.workshop}</td>
-                              <td className="p-4">
-                                <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${
-                                  r.status === 'COMPLETADOS' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
-                                }`}>
-                                  {r.status}
-                                </span>
-                              </td>
-                              <td className="p-4 font-black">{r.daysInShop || '0'}d</td>
-                              <td className="p-4 text-right">
-                                <button 
-                                  onClick={() => setClosingReport(r)}
-                                  className="text-indigo-600 font-black uppercase tracking-widest text-[8px] hover:underline"
-                                >
-                                  Gestionar
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {filteredReports.map(r => (
-                      <ReportCard 
-                        key={r.id} 
-                        report={r} 
-                        onViewDoc={(url, t) => setViewDoc({url, title: t})} 
-                        onManageClosure={setClosingReport} 
-                        onManageEntry={setRegisteringEntry}
-                      />
-                    ))}
-                    {filteredReports.length === 0 && (
-                      <div className="col-span-full bg-white rounded-[3rem] p-20 text-center border-2 border-dashed border-slate-200">
-                        <ClipboardList size={48} className="mx-auto text-slate-200 mb-4" />
-                        <p className="text-slate-400 font-black uppercase tracking-widest text-sm">No se han encontrado novedades con los filtros seleccionados</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-            </div>
+            <NoveltyReportModule 
+              vehicles={vehicles} 
+              reports={noveltyReports}
+              onRefresh={async () => {
+                const updated = await fetchNoveltyReportsFromSheet();
+                setNoveltyReports(updated);
+                setCachedData('noveltyReports', updated);
+                return updated;
+              }}
+            />
           )}
 
 

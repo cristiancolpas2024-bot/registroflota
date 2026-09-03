@@ -461,3 +461,34 @@ export interface SparePartInspectionPayload {
   evidencia?: string;
 }
 
+export interface NoveltyReport {
+  ot: string;            // ORDEN DE TRABAJO
+  fecha: string;
+  cd: string;
+  contratista: string;
+  plate: string;
+  conductor: string;
+  novedad: string;
+  taller: string;
+  evidenciaReporte1: string;
+  evidenciaReporte2: string;
+  estado: string;        // ABIERTO / CERRADO
+  evidenciaCierre1: string;
+  evidenciaCierre2: string;
+}
+
+export type NoveltyReportRecord = NoveltyReport;
+
+export interface NoveltyReportPayload {
+  fecha: string;
+  cd: string;
+  contratista: string;
+  plate: string;
+  conductor: string;
+  novedad: string;
+  taller: string;
+  evidencia1?: string;
+  evidencia2?: string;
+}
+
+

@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, SparePartRecord, SparePartInspectionPayload } from '../types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, SparePartRecord, SparePartInspectionPayload, NoveltyReport, NoveltyReportPayload } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec'; 
@@ -7,7 +7,8 @@ const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbze5D1_
 const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
 const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
 const GOOGLE_SCRIPT_AUDIT_URL = 'https://script.google.com/macros/s/AKfycbxSrmZSoQp1l98M3Hcfktl31gel3ynU2eVT2d1_IOg0UKCRVJQVCTKwSmMjZ54EORB1-w/exec';
-export const SPARE_PARTS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxztSeQFSRD3Ae794Aiqs-MvXsYB5Ylfcu4ny4EJtpZqV0rB7lJBrfjnL7gfD2uWGnW/exec';
+export const OPERATIONAL_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxztSeQFSRD3Ae794Aiqs-MvXsYB5Ylfcu4ny4EJtpZqV0rB7lJBrfjnL7gfD2uWGnW/exec';
+export const SPARE_PARTS_SCRIPT_URL = OPERATIONAL_SCRIPT_URL;
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
@@ -18,6 +19,9 @@ const BACKEND_DOC_ID = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
 const BASE_URL_BACKEND = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv`;
 export const SPARE_PARTS_DOC_ID = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
 export const SPARE_PARTS_GID = '2062393449';
+export const NOVEDADES_OP_DOC_ID = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
+export const NOVEDADES_OP_GID = '1190843304';
+
 
 const CORRECTIVES_DOC_ID = '1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0';
 const BASE_URL_CORRECTIVES = `https://docs.google.com/spreadsheets/d/${CORRECTIVES_DOC_ID}/export?format=csv`;
@@ -2302,5 +2306,104 @@ export const submitSparePartInspection = async (payload: SparePartInspectionPayl
     return false;
   }
 };
+
+/**
+ * REPORTE DE NOVEDADES (Hoja NOVEDADES - GID 1190843304)
+ * Registro de novedades operativas y envío de correo al taller
+ */
+export const submitNoveltyReport = async (data: NoveltyReportPayload): Promise<boolean> => {
+  const payload = {
+    method: 'POST_NOVELTY_REPORT',
+    data: { 
+      ...data, 
+      clientRequestId: `${data.plate}-${Date.now()}`,
+      docId: NOVEDADES_OP_DOC_ID, 
+      sheetName: 'NOVEDADES' 
+    }
+  };
+  try {
+    const result = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, true);
+    if (result && typeof result === 'object' && (result as any).status === 'success') return true;
+    if (result === true) return true;
+    // Si llegó respuesta pero no fue success explícito, NO reintentar (evita duplicado)
+    return false;
+  } catch (e) { 
+    // Solo si hubo error REAL de red, intentar una vez sin cors
+    console.warn('Reporte novedad error de red, fallback único:', e); 
+    const ok = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, false);
+    return !!ok;
+  }
+};
+
+export const submitNoveltyClose = async (data: {
+  ot: string;
+  plate: string;
+  evidenciaCierre1?: string;
+  evidenciaCierre2?: string;
+}): Promise<boolean> => {
+  const payload = {
+    method: 'POST_NOVELTY_CLOSE',
+    data: {
+      ...data,
+      docId: NOVEDADES_OP_DOC_ID,
+      sheetName: 'NOVEDADES'
+    }
+  };
+  try {
+    const result = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, true);
+    if (result && typeof result === 'object' && (result as any).status === 'success') return true;
+    if (result === true) return true;
+  } catch (e) {
+    console.warn('Cierre novedad CORS falló, fallback:', e);
+  }
+  const ok = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, false);
+  return !!ok;
+};
+
+export const fetchNoveltyReportsFromSheet = async (): Promise<NoveltyReport[]> => {
+  const docId = NOVEDADES_OP_DOC_ID;
+  const GID = NOVEDADES_OP_GID; // 1190843304
+  const map = (rows: any[][]): NoveltyReport[] =>
+    rows.slice(1)
+      .filter(r => r && (cleanSheetValue(r[0]) || cleanSheetValue(r[4]))) // tiene OT o placa
+      .map((r): NoveltyReport => ({
+        ot: cleanSheetValue(r[0]),
+        fecha: cleanSheetValue(r[1]),
+        cd: cleanSheetValue(r[2]),
+        contratista: cleanSheetValue(r[3]),
+        plate: cleanSheetValue(r[4]),
+        conductor: cleanSheetValue(r[5]),
+        novedad: cleanSheetValue(r[6]),
+        taller: cleanSheetValue(r[7]),
+        evidenciaReporte1: cleanSheetValue(r[8]),
+        evidenciaReporte2: cleanSheetValue(r[9]),
+        estado: cleanSheetValue(r[10]) || 'ABIERTO',
+        evidenciaCierre1: cleanSheetValue(r[11]),
+        evidenciaCierre2: cleanSheetValue(r[12]),
+      }));
+
+  // Intentar Apps Script por gid; si no, CSV por gid
+  try {
+    const rows = await fetchDataFromGAS(docId, 'NOVEDADES', OPERATIONAL_SCRIPT_URL);
+    if (rows && rows.length >= 2) return map(rows);
+  } catch (e) { 
+    console.warn("GAS fetch novelty reports failed, trying CSV fallback:", e);
+  }
+
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${GID}${getCacheBuster()}`;
+    const resp = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    const csv = await resp.text();
+    if (csv && !csv.includes('<!DOCTYPE html')) {
+      const parsed = Papa.parse(csv, { skipEmptyLines: true });
+      return map(parsed.data as any[][]);
+    }
+  } catch (e) { 
+    console.error("Error fetching novelty reports CSV:", e);
+  }
+
+  return [];
+};
+
 
 
