@@ -56,14 +56,24 @@ const AUDIT_QS_DOC_ID = '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM';
 
 const getCacheBuster = () => `&t=${new Date().getTime()}`;
 
+// Memory cache to prevent repetitive network trips during session
+const memoryCache = new Map<string, { data: any[][]; timestamp: number }>();
+const CACHE_TTL = 3 * 60 * 1000; // 3 minutes
+
 const fetchDataFromGAS = async (docId: string, sheetName?: string, scriptUrl: string = GOOGLE_SCRIPT_WEB_APP_URL): Promise<any[][] | null> => {
+  const cacheKey = `${docId}_${sheetName || 'default'}_${scriptUrl}`;
+  const cached = memoryCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+
   try {
     let url = `${scriptUrl}?method=GET_DATA&docId=${docId}`;
     if (sheetName) url += `&sheetName=${encodeURIComponent(sheetName)}`;
     
-    // Usamos un timeout para el fetch para evitar esperas infinitas
+    // Timeout ultra-rápido de 6s para no bloquear la app si GAS está saturado o tarda
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); 
+    const timeoutId = setTimeout(() => controller.abort(), 6000); 
 
     const response = await fetch(url, { 
       method: 'GET',
@@ -76,27 +86,23 @@ const fetchDataFromGAS = async (docId: string, sheetName?: string, scriptUrl: st
     clearTimeout(timeoutId);
     
     if (!response.ok) {
-      console.warn(`GAS Fetch failed for ${sheetName}: ${response.status} ${response.statusText}`);
+      console.warn(`GAS Fetch failed for ${sheetName}: ${response.status}`);
       return null;
     }
 
     const text = await response.text();
     try {
       const json = JSON.parse(text);
-      if (json.status === 'success' && json.message) return json.message as any[][];
-      if (json.status === 'error') console.warn(`GAS Error for ${sheetName}:`, json.message);
+      if (json.status === 'success' && json.message) {
+        const rows = json.message as any[][];
+        memoryCache.set(cacheKey, { data: rows, timestamp: Date.now() });
+        return rows;
+      }
       return null;
-    } catch (parseError) {
-      console.warn(`Error parsing GAS response for ${sheetName}`);
+    } catch {
       return null;
     }
   } catch (e) {
-    if (e instanceof Error && e.name === 'AbortError') {
-      console.warn(`GAS fetch timeout for ${sheetName}`);
-    } else {
-      // Usamos warn en vez de error para no alarmar si hay fallback CSV
-      console.warn(`GAS lookup bypassed for ${sheetName} (Network/CORS redirect). Falling back to CSV/Direct.`);
-    }
     return null;
   }
 };

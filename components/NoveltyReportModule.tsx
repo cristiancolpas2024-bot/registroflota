@@ -526,7 +526,14 @@ export default function NoveltyReportModule({
   const [isPlateDropdownOpen, setIsPlateDropdownOpen] = useState(false);
 
   // History State
-  const [internalReports, setInternalReports] = useState<NoveltyReport[]>([]);
+  const [internalReports, setInternalReports] = useState<NoveltyReport[]>(() => {
+    try {
+      const cached = localStorage.getItem('cache_noveltyReports');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTaller, setFilterTaller] = useState('ALL');
@@ -567,7 +574,9 @@ export default function NoveltyReportModule({
 
   // Load History
   const loadHistory = async () => {
-    setIsLoadingHistory(true);
+    if (internalReports.length === 0 && (!reports || reports.length === 0)) {
+      setIsLoadingHistory(true);
+    }
     try {
       if (onRefresh) {
         const res = await onRefresh();
@@ -576,7 +585,10 @@ export default function NoveltyReportModule({
         }
       } else {
         const data = await fetchNoveltyReportsFromSheet();
-        setInternalReports(data);
+        if (data && data.length > 0) {
+          setInternalReports(data);
+          localStorage.setItem('cache_noveltyReports', JSON.stringify(data));
+        }
       }
     } catch (err) {
       console.error('Error cargando historial de novedades:', err);
@@ -796,9 +808,21 @@ else if (m === 'POST_NOVELTY_REPORT') {
     }
   }
 
-  // Orden de trabajo automática: OT- + (número de filas)
-  var lastRow = s.getLastRow();
-  var ot = "OT-" + ("0000" + (lastRow)).slice(-4);
+  // Orden de trabajo automática: Consecutivo superior al número 2189 (e.g. OT-2190, OT-2191...)
+  var maxOTNum = 2189;
+  var allData = s.getDataRange().getValues();
+  for (var k = 1; k < allData.length; k++) {
+    var rawOt = (allData[k][0] || "").toString();
+    var match = rawOt.match(/\d+/);
+    if (match) {
+      var num = parseInt(match[0], 10);
+      if (!isNaN(num) && num > maxOTNum) {
+        maxOTNum = num;
+      }
+    }
+  }
+  var nextOTNum = maxOTNum + 1;
+  var ot = "OT-" + nextOTNum;
 
   var ev1 = sImg(d.evidencia1, "NOV_REP1_" + placa);
   var ev2 = sImg(d.evidencia2, "NOV_REP2_" + placa);
@@ -904,9 +928,6 @@ function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conducto
               <ClipboardList className="text-indigo-400" size={32} />
               Reporte de Novedades
             </h1>
-            <p className="text-xs text-slate-300 max-w-2xl font-medium">
-              Registra fallas operativas con evidencias fotográficas. Al guardar, se genera automáticamente el consecutivo <span className="text-indigo-300 font-mono font-bold">OT-XXXX</span>, se almacena en la hoja <span className="text-indigo-300 font-mono font-bold">NOVEDADES</span> y se despacha la notificación por correo al taller seleccionado.
-            </p>
           </div>
 
           {/* Estado Formulario */}
@@ -921,9 +942,9 @@ function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conducto
 
       {/* PESTAÑA 1: FORMULARIO NUEVO REPORTE */}
       {activeTab === 'form' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Formulario Principal (8 columnas en lg, 1 col en mobile) */}
-          <div className="lg:col-span-8 bg-white rounded-[2rem] border border-slate-200 shadow-xl overflow-hidden">
+        <div className="max-w-4xl mx-auto">
+          {/* Formulario Principal */}
+          <div className="bg-white rounded-[2rem] border border-slate-200 shadow-xl overflow-hidden">
             <div className="p-5 md:p-8 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
@@ -1207,79 +1228,6 @@ function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conducto
                 </button>
               </div>
             </form>
-          </div>
-
-          {/* Panel Lateral: Talleres y Flujo (4 columnas en lg) */}
-          <div className="lg:col-span-4 space-y-6">
-            {/* Tarjeta de Talleres Autorizados */}
-            <div className="bg-white rounded-[2rem] border border-slate-200 shadow-lg p-6 space-y-4">
-              <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                  <Wrench size={20} />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Talleres de Mantenimiento</h3>
-                  <p className="text-[11px] text-slate-400 font-medium">Red autorizada para atención</p>
-                </div>
-              </div>
-
-              <div className="space-y-2.5">
-                {NOVELTY_WORKSHOPS.map((w) => {
-                  const isSelected = taller === w;
-                  return (
-                    <div 
-                      key={w}
-                      onClick={() => setTaller(w)}
-                      className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${isSelected ? 'bg-indigo-50/80 border-indigo-300 ring-1 ring-indigo-300 shadow-xs' : 'bg-slate-50/60 border-slate-200 hover:bg-slate-100/80'}`}
-                    >
-                      <div className="space-y-0.5">
-                        <p className={`text-xs font-black uppercase ${isSelected ? 'text-indigo-900' : 'text-slate-800'}`}>{w}</p>
-                        <p className="text-[10px] text-slate-400 font-medium">Taller Autorizado</p>
-                      </div>
-                      {isSelected ? (
-                        <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs shadow-sm">
-                          <Check size={14} />
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Elegir</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 italic">
-                La notificación automática se despacha de forma interna al taller seleccionado al registrar la novedad.
-              </div>
-            </div>
-
-            {/* Tarjeta de Resumen Rápido */}
-            <div className="bg-slate-900 text-white rounded-[2rem] p-6 space-y-4 shadow-xl border border-slate-800 relative overflow-hidden">
-              <div className="absolute right-0 bottom-0 translate-x-4 translate-y-4 text-white/5 pointer-events-none">
-                <ClipboardList size={120} />
-              </div>
-              <h4 className="text-xs font-black uppercase tracking-widest text-indigo-400 flex items-center gap-2">
-                <ShieldCheck size={16} /> Flujo de la Novedad
-              </h4>
-              <ul className="text-xs text-slate-300 space-y-2.5 font-medium">
-                <li className="flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-indigo-500/30 text-indigo-300 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">1</span>
-                  <span>El usuario diligencia la novedad y adjunta hasta 2 fotografías.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-indigo-500/30 text-indigo-300 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">2</span>
-                  <span>El backend asigna el consecutivo consecutivo <b className="text-white">OT-XXXX</b> y guarda la fila en estado <b className="text-amber-400">ABIERTO</b>.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-indigo-500/30 text-indigo-300 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">3</span>
-                  <span>Se despacha un correo HTML estructurado al taller con los enlaces de evidencias.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-indigo-500/30 text-indigo-300 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">4</span>
-                  <span>Al solucionar el problema, se adjuntan evidencias de cierre y pasa a <b className="text-emerald-400">CERRADO</b>.</span>
-                </li>
-              </ul>
-            </div>
           </div>
         </div>
       )}

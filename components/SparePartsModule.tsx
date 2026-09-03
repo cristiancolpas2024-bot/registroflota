@@ -111,7 +111,14 @@ export const SparePartsModule: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Historial de repuestos
-  const [historyRecords, setHistoryRecords] = useState<SparePartRecord[]>([]);
+  const [historyRecords, setHistoryRecords] = useState<SparePartRecord[]>(() => {
+    try {
+      const cached = localStorage.getItem('cache_spareParts');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterWorkshop, setFilterWorkshop] = useState('ALL');
@@ -140,10 +147,15 @@ export const SparePartsModule: React.FC = () => {
   }, [activeTab]);
 
   const loadHistory = async () => {
-    setIsLoadingHistory(true);
+    if (historyRecords.length === 0) {
+      setIsLoadingHistory(true);
+    }
     try {
       const data = await fetchSparePartsFromSheet();
-      setHistoryRecords(data);
+      if (data && data.length > 0) {
+        setHistoryRecords(data);
+        localStorage.setItem('cache_spareParts', JSON.stringify(data));
+      }
     } catch (e) {
       console.error("Error loading spare parts history:", e);
     } finally {

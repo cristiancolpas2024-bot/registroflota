@@ -577,6 +577,107 @@ function doPost(e) {
         if (lock.hasLock()) lock.releaseLock();
         return output("error", "No se encontró auditoria " + idSearch);
       }
+      else if (m === 'POST_NOVELTY_REPORT') {
+        var s = ss.getSheetByName("NOVEDADES") || getSheetByGid(ss, "1190843304") || getS(ss, "NOVEDADES");
+        if (!s) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "No se encontró la hoja NOVEDADES.");
+        }
+
+        var placa = (d.plate || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
+        var novedad = (d.novedad || "").toString().trim();
+        var fechaR = d.fecha || today();
+
+        // DEDUP: revisar las últimas 5 filas por placa+novedad+fecha iguales
+        var data = s.getDataRange().getValues();
+        for (var i = Math.max(1, data.length - 5); i < data.length; i++) {
+          var rPlaca = (data[i][4] || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
+          var rNov = (data[i][6] || "").toString().trim();
+          var rFecha = (data[i][1] || "").toString().trim();
+          if (rPlaca === placa && rNov === novedad && rFecha.indexOf(fechaR) !== -1) {
+            if (lock.hasLock()) lock.releaseLock();
+            return output("success", "Novedad ya registrada (" + (data[i][0] || "") + ").");
+          }
+        }
+
+        // Consecutivo superior a 2189 (e.g. OT-2190, OT-2191...)
+        var maxOTNum = 2189;
+        for (var k = 1; k < data.length; k++) {
+          var rawOt = (data[k][0] || "").toString();
+          var match = rawOt.match(/\d+/);
+          if (match) {
+            var num = parseInt(match[0], 10);
+            if (!isNaN(num) && num > maxOTNum) {
+              maxOTNum = num;
+            }
+          }
+        }
+        var nextOTNum = maxOTNum + 1;
+        var ot = "OT-" + nextOTNum;
+
+        var ev1 = sImg(d.evidencia1, "NOV_REP1_" + placa);
+        var ev2 = sImg(d.evidencia2, "NOV_REP2_" + placa);
+
+        var rowData = [
+          ot,
+          fechaR,
+          d.cd || "",
+          d.contratista || "",
+          placa,
+          d.conductor || "",
+          novedad,
+          (d.taller || "").toString().toUpperCase().trim(),
+          ev1 || "",
+          ev2 || "",
+          "ABIERTO",
+          "",
+          ""
+        ];
+        s.appendRow(rowData);
+
+        try {
+          enviarCorreoNovedad(d.taller, ot, fechaR, d.cd, d.contratista, placa, d.conductor, novedad, ev1, ev2);
+        } catch (mailErr) {
+          // Log error silencioso
+        }
+
+        if (lock.hasLock()) lock.releaseLock();
+        return output("success", "Novedad reportada (" + ot + ") y correo enviado al taller " + d.taller + ".");
+      }
+      else if (m === 'POST_NOVELTY_CLOSE') {
+        var s = ss.getSheetByName("NOVEDADES") || getSheetByGid(ss, "1190843304") || getS(ss, "NOVEDADES");
+        if (!s) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "No se encontró la hoja NOVEDADES.");
+        }
+
+        var otBuscada = (d.ot || "").toString().trim().toUpperCase();
+        var data = s.getDataRange().getValues();
+        var foundRow = -1;
+
+        for (var i = 1; i < data.length; i++) {
+          var rOt = (data[i][0] || "").toString().trim().toUpperCase();
+          if (rOt === otBuscada) {
+            foundRow = i + 1;
+            break;
+          }
+        }
+
+        if (foundRow === -1) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "No se encontró la novedad con OT: " + otBuscada);
+        }
+
+        var cEv1 = sImg(d.cierreEvidencia1, "NOV_CIE1_" + otBuscada);
+        var cEv2 = sImg(d.cierreEvidencia2, "NOV_CIE2_" + otBuscada);
+
+        s.getRange(foundRow, 11).setValue("CERRADO");
+        if (cEv1) s.getRange(foundRow, 12).setValue(cEv1);
+        if (cEv2) s.getRange(foundRow, 13).setValue(cEv2);
+
+        if (lock.hasLock()) lock.releaseLock();
+        return output("success", "Novedad " + otBuscada + " cerrada correctamente.");
+      }
       else if (m === 'UPLOAD_IMAGE') {
         var url = sImg(d.base64, d.name);
         if (lock.hasLock()) lock.releaseLock();
@@ -627,4 +728,68 @@ function today() { return Utilities.formatDate(new Date(), "GMT-5", "yyyy-MM-dd"
 
 function output(status, message) {
   return ContentService.createTextOutput(JSON.stringify({status: status, message: message})).setMimeType(ContentService.MimeType.JSON);
+}
+
+function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conductor, novedad, ev1, ev2) {
+  var correosTaller = {
+    "TECNIBENZ": "Gerente@mtecnibenz.com,Contabilidad@mtecnibenz.com",
+    "TODOFIBRA": "administracion@carroceriastodofibra.com.co",
+    "ELECTRONIC": "zonanorte@elec-s.com,comercial5@elec-s.com",
+    "NAVITRANS": "jfrancot@navitrans.com.co",
+    "VEHIPESA": "auxi.adm.vehipesa@gmail.com,aux.operativo.vehipesa@gmail.com"
+  };
+  var cc = "aperez@rentingcolombia.com,edgar.arrieta@ab-inbev.com";
+  var destino = correosTaller[(taller || "").toUpperCase().trim()] || cc;
+
+  var estado = "ABIERTO";
+  var estadoColor = "#F2B705";
+
+  function fila(label, valor, bg, valorColor, bold) {
+    return '<tr style="background:' + bg + ';">' +
+             '<td style="padding:12px 16px;color:#6B7280;font-size:14px;width:45%;">' + label + '</td>' +
+             '<td style="padding:12px 16px;color:' + (valorColor || '#111827') + ';font-size:14px;' + (bold ? 'font-weight:bold;' : '') + '">' + (valor || '') + '</td>' +
+           '</tr>';
+  }
+
+  var filas =
+    fila('Taller Asignado:', taller, '#F1F3F5', '#111827', true) +
+    fila('Fecha de Reporte:', fecha, '#FFFFFF') +
+    fila('Placa del Vehículo:', placa, '#F1F3F5', '#111827', true) +
+    fila('Centro de Distribución (CD):', cd, '#FFFFFF') +
+    fila('Contratista / Empresa:', contratista, '#F1F3F5') +
+    fila('Conductor / Reportante:', conductor, '#FFFFFF') +
+    fila('Descripción de Novedad:', novedad, '#F1F3F5', '#DC2626', true);
+
+  var evHtml = '';
+  if (ev1 || ev2) {
+    evHtml += '<div style="margin-top:20px;padding:16px;background:#F9FAFB;border-radius:8px;border:1px solid #E5E7EB;">' +
+      '<p style="margin:0 0 12px 0;font-weight:bold;color:#374151;font-size:14px;">📸 Evidencias Fotográficas Adjuntas:</p>';
+    if (ev1) evHtml += '<a href="' + ev1 + '" target="_blank" style="display:inline-block;margin-right:12px;margin-bottom:8px;padding:8px 16px;background:#4F46E5;color:#FFFFFF;text-decoration:none;border-radius:6px;font-size:13px;font-weight:bold;">Ver Evidencia 1</a>';
+    if (ev2) evHtml += '<a href="' + ev2 + '" target="_blank" style="display:inline-block;padding:8px 16px;background:#4F46E5;color:#FFFFFF;text-decoration:none;border-radius:6px;font-size:13px;font-weight:bold;">Ver Evidencia 2</a>';
+    evHtml += '</div>';
+  }
+
+  var html =
+  '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #E5E7EB;border-radius:12px;background:#FFFFFF;">' +
+    '<div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #E5E7EB;">' +
+      '<span style="background:#4F46E5;color:#FFFFFF;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;">Sistema de Gestión de Flota</span>' +
+      '<h2 style="color:#111827;margin:12px 0 4px 0;font-size:22px;">Reporte de Novedad Operativa</h2>' +
+      '<p style="color:#6B7280;margin:0;font-size:14px;">Orden de Trabajo: <strong style="color:#4F46E5;">' + ot + '</strong></p>' +
+    '</div>' +
+    '<div style="text-align:center;margin-bottom:20px;">' +
+      '<span style="background:' + estadoColor + ';color:#FFFFFF;padding:6px 16px;border-radius:20px;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;">Estado: ' + estado + '</span>' +
+    '</div>' +
+    '<table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;border:1px solid #E5E7EB;">' +
+      filas +
+    '</table>' +
+    evHtml +
+    '<p style="color:#9CA3AF;font-size:12px;text-align:center;margin-top:24px;">Mensaje generado automáticamente por el Sistema de Gestión Flota Barranquilla.</p>' +
+  '</div>';
+
+  MailApp.sendEmail({
+    to: destino,
+    cc: cc,
+    subject: "🔧 Reporte de Novedad " + ot + " - Placa " + placa + " (" + taller + ")",
+    htmlBody: html
+  });
 }

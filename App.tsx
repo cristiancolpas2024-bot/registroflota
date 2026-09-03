@@ -940,9 +940,9 @@ const App: React.FC = () => {
           {[
             { id: 'kilometrajes', icon: <Gauge size={22} className="stroke-[2.25]" />, label: 'KMs' },
             { id: 'novedades', icon: <ClipboardList size={22} className="stroke-[2.25]" />, label: 'Novs' },
+            { id: 'repuestos', icon: <Package size={22} className="stroke-[2.25]" />, label: 'Repuestos' },
             { id: 'limpieza', icon: <Sparkles size={22} className="stroke-[2.25]" />, label: '5S' },
-            { id: 'indicadoresOperativos', icon: <Activity size={22} className="stroke-[2.25]" />, label: 'Ind' },
-            { id: 'enlaces', icon: <LinkIcon size={22} className="stroke-[2.25]" />, label: 'Links' },
+            { id: 'lavados', icon: <Droplets size={22} className="stroke-[2.25]" />, label: 'Lavados' },
           ].map(item => {
             const isActive = activeView === item.id;
             return (
