@@ -6,11 +6,12 @@ import { X, Droplets, Camera, Save, Plus, Trash2, Loader2, Sparkles, MapPin, Bui
 
 interface WashFormProps {
   vehicles: Vehicle[];
-  onClose: () => void;
+  onClose?: () => void;
   onSubmit: (data: any) => Promise<void>;
+  isInline?: boolean;
 }
 
-const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
+const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit, isInline = false }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
@@ -273,7 +274,18 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
       };
       await onSubmit(payload);
       setIsSuccess(true);
-      setTimeout(onClose, 1500);
+      setTimeout(() => {
+        setIsSuccess(false);
+        setFormData({
+          plate: '',
+          date: new Date().toISOString().split('T')[0],
+          workshop: 'VEHIPESA',
+          mapUrl: '',
+        });
+        setPhotos([]);
+        setPlateSearch('');
+        if (onClose && !isInline) onClose();
+      }, 1800);
     } catch (error) {
       alert("Error al registrar el lavado.");
     } finally {
@@ -282,6 +294,15 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
   };
 
   if (isSuccess) {
+    if (isInline) {
+      return (
+        <div className="w-full max-w-xl mx-auto bg-white rounded-2xl sm:rounded-3xl p-8 sm:p-12 flex flex-col items-center text-center border-2 border-cyan-500 shadow-xl animate-in zoom-in duration-300">
+          <Sparkles size={48} className="text-cyan-500 mb-3 animate-bounce" />
+          <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">¡LAVADO REGISTRADO!</h2>
+          <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mt-1">Guardado con éxito en el sistema</p>
+        </div>
+      );
+    }
     return (
       <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[95] p-4">
         <div className="bg-white rounded-3xl p-8 sm:p-10 flex flex-col items-center text-center max-w-sm border-2 border-cyan-500 shadow-2xl animate-in zoom-in duration-300">
@@ -293,25 +314,20 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
     );
   }
 
-  return (
-    <div 
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[95] flex items-end sm:items-center justify-center p-0 sm:p-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="bg-white rounded-t-[1.75rem] sm:rounded-3xl w-full max-w-lg max-h-[92vh] sm:max-h-[88vh] flex flex-col shadow-2xl border-t-2 sm:border-2 border-slate-900 overflow-hidden animate-in slide-in-from-bottom-6 sm:zoom-in duration-300">
-        {/* Sticky Header */}
-        <div className="shrink-0 bg-[#0f172a] px-4 py-3.5 sm:px-6 sm:py-4 text-white flex justify-between items-center z-10 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="p-2 sm:p-2.5 bg-cyan-500 rounded-xl shadow-md text-white">
-              <Droplets size={20} />
-            </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-black uppercase tracking-tight">Registro de Lavado</h2>
-              <p className="text-[9px] text-cyan-400 font-bold uppercase tracking-widest">Control de Higiene</p>
-            </div>
+  const formElement = (
+    <div className={isInline ? "w-full max-w-xl mx-auto bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-slate-200 overflow-hidden" : "bg-white rounded-t-[1.75rem] sm:rounded-3xl w-full max-w-lg max-h-[92vh] sm:max-h-[88vh] flex flex-col shadow-2xl border-t-2 sm:border-2 border-slate-900 overflow-hidden animate-in slide-in-from-bottom-6 sm:zoom-in duration-300"}>
+      {/* Sticky Header */}
+      <div className="shrink-0 bg-[#0f172a] px-4 py-3.5 sm:px-6 sm:py-4 text-white flex justify-between items-center z-10 border-b border-slate-800">
+        <div className="flex items-center gap-3">
+          <div className="p-2 sm:p-2.5 bg-cyan-500 rounded-xl shadow-md text-white">
+            <Droplets size={20} />
           </div>
+          <div>
+            <h2 className="text-base sm:text-lg font-black uppercase tracking-tight">Registro de Lavado</h2>
+            <p className="text-[9px] text-cyan-400 font-bold uppercase tracking-widest">Control de Higiene</p>
+          </div>
+        </div>
+        {!isInline && onClose && (
           <button 
             type="button"
             onClick={onClose} 
@@ -320,14 +336,15 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
           >
             <X size={20} />
           </button>
-        </div>
+        )}
+      </div>
 
-        {/* Scrollable Form Body */}
-        <form 
-          onSubmit={handleSubmit} 
-          className="overflow-y-auto flex-1 p-3.5 sm:p-6 space-y-3.5 sm:space-y-4 bg-slate-50/50 pb-8 sm:pb-6"
-          style={{ WebkitOverflowScrolling: 'touch' }}
-        >
+      {/* Form Body */}
+      <form 
+        onSubmit={handleSubmit} 
+        className={`${isInline ? '' : 'overflow-y-auto flex-1'} p-3.5 sm:p-6 space-y-3.5 sm:space-y-4 bg-slate-50/50 pb-8 sm:pb-6`}
+        style={!isInline ? { WebkitOverflowScrolling: 'touch' } : undefined}
+      >
           {/* Filtro por Centro (C.D.) */}
           <div className="bg-white p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200 shadow-xs space-y-1.5">
             <label className="text-[9px] sm:text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
@@ -493,7 +510,21 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
             </button>
           </div>
         </form>
-      </div>
+    </div>
+  );
+
+  if (isInline) {
+    return formElement;
+  }
+
+  return (
+    <div 
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[95] flex items-end sm:items-center justify-center p-0 sm:p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && onClose) onClose();
+      }}
+    >
+      {formElement}
     </div>
   );
 };
