@@ -284,37 +284,57 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
   if (isSuccess) {
     return (
       <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[95] p-4">
-        <div className="bg-white rounded-[3rem] p-12 flex flex-col items-center text-center max-w-sm border-4 border-indigo-500 shadow-2xl animate-in zoom-in duration-300">
-          <Sparkles size={64} className="text-indigo-500 mb-4 animate-bounce" />
-          <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tighter leading-tight">¡LAVADO REGISTRADO!</h2>
+        <div className="bg-white rounded-3xl p-8 sm:p-10 flex flex-col items-center text-center max-w-sm border-2 border-cyan-500 shadow-2xl animate-in zoom-in duration-300">
+          <Sparkles size={48} className="text-cyan-500 mb-3 animate-bounce" />
+          <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">¡LAVADO REGISTRADO!</h2>
+          <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mt-1">Guardado con éxito</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center items-start sm:items-center z-[90] p-2 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-[2rem] sm:rounded-[3rem] w-full max-w-lg my-4 sm:my-8 shadow-2xl border-[4px] sm:border-[6px] border-[#0f172a] overflow-hidden animate-in zoom-in duration-300">
-        <div className="bg-[#0f172a] p-5 sm:p-8 text-white flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-indigo-500 rounded-2xl shadow-lg">
-              <Droplets size={24} />
+    <div 
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[95] flex items-end sm:items-center justify-center p-0 sm:p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="bg-white rounded-t-[1.75rem] sm:rounded-3xl w-full max-w-lg max-h-[92vh] sm:max-h-[88vh] flex flex-col shadow-2xl border-t-2 sm:border-2 border-slate-900 overflow-hidden animate-in slide-in-from-bottom-6 sm:zoom-in duration-300">
+        {/* Sticky Header */}
+        <div className="shrink-0 bg-[#0f172a] px-4 py-3.5 sm:px-6 sm:py-4 text-white flex justify-between items-center z-10 border-b border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="p-2 sm:p-2.5 bg-cyan-500 rounded-xl shadow-md text-white">
+              <Droplets size={20} />
             </div>
             <div>
-              <h2 className="text-xl font-black uppercase tracking-tighter">REGISTRO DE LAVADO</h2>
-              <p className="text-[9px] text-indigo-400 font-bold uppercase tracking-widest">Control de Higiene</p>
+              <h2 className="text-base sm:text-lg font-black uppercase tracking-tight">Registro de Lavado</h2>
+              <p className="text-[9px] text-cyan-400 font-bold uppercase tracking-widest">Control de Higiene</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2.5 bg-white/10 hover:bg-rose-500 rounded-xl transition-all"><X size={28} /></button>
+          <button 
+            type="button"
+            onClick={onClose} 
+            className="p-1.5 sm:p-2 bg-white/10 hover:bg-rose-500 hover:text-white rounded-xl transition-all text-slate-300 active:scale-95"
+            title="Cerrar"
+          >
+            <X size={20} />
+          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 sm:p-8 space-y-4 sm:space-y-6 bg-white">
-          <div className="bg-indigo-50/40 p-6 rounded-[2.5rem] border-2 border-indigo-100/50 shadow-inner">
-            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-1.5 mb-2">
-              <Building2 size={12} className="text-indigo-600" /> FILTRAR POR CENTRO (C.D.)
+        {/* Scrollable Form Body */}
+        <form 
+          onSubmit={handleSubmit} 
+          className="overflow-y-auto flex-1 p-3.5 sm:p-6 space-y-3.5 sm:space-y-4 bg-slate-50/50 pb-8 sm:pb-6"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
+          {/* Filtro por Centro (C.D.) */}
+          <div className="bg-white p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200 shadow-xs space-y-1.5">
+            <label className="text-[9px] sm:text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+              <Building2 size={13} className="text-cyan-600" /> Filtrar por Centro (C.D.)
             </label>
             <select 
-              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-4 text-[11px] font-black uppercase outline-none focus:border-indigo-500 transition-all shadow-sm" 
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl px-3 py-2 sm:py-2.5 text-xs font-black uppercase text-slate-800 outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500 transition-all" 
               value={filterCd} 
               onChange={(e) => handleCdChange(e.target.value)}
             >
@@ -323,112 +343,127 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
             </select>
           </div>
 
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <div className="flex justify-between items-end px-2">
-                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">UNIDAD VEHICULAR (PLACA)</label>
-                <div className="relative group">
-                  <input 
-                    type="text" 
-                    placeholder="BUSCAR PLACA..." 
-                    className="bg-slate-100 border-none rounded-lg px-3 py-1 text-[10px] font-black uppercase outline-none focus:ring-2 ring-indigo-500/30 w-32 transition-all"
-                    value={plateSearch}
-                    onChange={(e) => setPlateSearch(e.target.value)}
-                  />
-                </div>
-              </div>
-              <select 
-                required 
-                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-black text-slate-800 outline-none appearance-none shadow-inner transition-all"
-                value={formData.plate} 
-                onChange={e => setFormData({ ...formData, plate: e.target.value })}
-              >
-                <option value="">-- {filteredVehiclesList.length === 0 ? 'SIN RESULTADOS' : 'SELECCIONE PLACA'} --</option>
-                {filteredVehiclesList.map(v => <option key={v.id} value={v.plate}>{v.plate}</option>)}
-              </select>
+          {/* Unidad Vehicular (Placa) */}
+          <div className="bg-white p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200 shadow-xs space-y-2">
+            <div className="flex justify-between items-center gap-2">
+              <label className="text-[9px] sm:text-[10px] font-black text-slate-600 uppercase tracking-wider">
+                Unidad Vehicular (Placa) *
+              </label>
+              <input 
+                type="text" 
+                placeholder="BUSCAR PLACA..." 
+                className="bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-1 text-[10px] font-black uppercase outline-none focus:ring-2 ring-cyan-500/30 w-28 sm:w-36 transition-all"
+                value={plateSearch}
+                onChange={(e) => setPlateSearch(e.target.value)}
+              />
             </div>
+            <select 
+              required 
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-black text-slate-800 outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500 transition-all"
+              value={formData.plate} 
+              onChange={e => setFormData({ ...formData, plate: e.target.value })}
+            >
+              <option value="">-- {filteredVehiclesList.length === 0 ? 'SIN RESULTADOS' : 'SELECCIONE PLACA'} --</option>
+              {filteredVehiclesList.map(v => <option key={v.id} value={v.plate}>{v.plate} - {v.cd || 'GENERAL'}</option>)}
+            </select>
+          </div>
 
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-2">TALLER / LUGAR</label>
+          {/* Taller / Lugar y Fecha */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="bg-white p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200 shadow-xs space-y-1.5">
+              <label className="text-[9px] sm:text-[10px] font-black text-slate-600 uppercase tracking-wider">
+                Taller / Lugar *
+              </label>
               <input 
                 required 
                 type="text" 
                 placeholder="VEHIPESA" 
-                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-black text-slate-800 outline-none uppercase shadow-inner" 
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-black text-slate-800 uppercase outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" 
                 value={formData.workshop} 
                 onChange={e => setFormData({ ...formData, workshop: e.target.value.toUpperCase() })} 
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-2 flex items-center gap-2">
-                <Calendar size={14} className="text-indigo-600" /> FECHA
+            <div className="bg-white p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200 shadow-xs space-y-1.5">
+              <label className="text-[9px] sm:text-[10px] font-black text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                <Calendar size={13} className="text-cyan-600" /> Fecha *
               </label>
               <input 
                 required 
                 type="date" 
-                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-black text-slate-800 outline-none shadow-inner" 
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-black text-slate-800 outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" 
                 value={formData.date} 
                 onChange={e => setFormData({ ...formData, date: e.target.value })} 
               />
             </div>
           </div>
 
-          <div className="space-y-4">
-            <label className="text-[11px] font-black text-indigo-600 uppercase tracking-widest px-2 flex items-center gap-2">
-              <MapPin size={18} /> UBICACIÓN (MAPA)
+          {/* Ubicación (Mapa) */}
+          <div className="bg-white p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200 shadow-xs space-y-2">
+            <label className="text-[9px] sm:text-[10px] font-black text-cyan-700 uppercase tracking-wider flex items-center gap-1.5">
+              <MapPin size={14} className="text-cyan-600" /> Ubicación (Mapa Opcional)
             </label>
-            <button 
-              type="button" 
-              onClick={() => mapInputRef.current?.click()} 
-              onDragOver={handleMapDragOver}
-              onDragLeave={handleMapDragLeave}
-              onDrop={handleMapDrop}
-              className={`w-full py-6 border-4 border-dashed rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-all shadow-inner relative ${isDraggingMap ? 'scale-105 bg-emerald-50 border-emerald-500 text-emerald-600 shadow-md' : formData.mapUrl ? 'bg-indigo-50 border-indigo-500 text-indigo-600' : 'bg-slate-50 border-slate-200 text-slate-400 hover:border-indigo-400'}`}
-            >
-              {isDraggingMap ? (
-                <>
-                  <Camera size={32} className="animate-bounce" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">SUELTE EL MAPA AQUÍ</span>
-                </>
-              ) : (
-                <>
-                  <ImageIcon size={32} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">{formData.mapUrl ? 'MAPA CAPTURADO ✓' : 'CAPTURAR MAPA'}</span>
-                </>
+            <div className="flex gap-2 items-center">
+              <button 
+                type="button" 
+                onClick={() => mapInputRef.current?.click()} 
+                onDragOver={handleMapDragOver}
+                onDragLeave={handleMapDragLeave}
+                onDrop={handleMapDrop}
+                className={`flex-1 py-2.5 px-3 border-2 border-dashed rounded-xl flex items-center justify-center gap-2 transition-all text-xs font-black uppercase tracking-wider ${isDraggingMap ? 'bg-emerald-50 border-emerald-500 text-emerald-600' : formData.mapUrl ? 'bg-cyan-50 border-cyan-400 text-cyan-700' : 'bg-slate-50 border-slate-300 text-slate-600 hover:border-cyan-400'}`}
+              >
+                {formData.mapUrl ? (
+                  <>
+                    <ImageIcon size={18} className="text-cyan-600" />
+                    <span>Mapa Capturado ✓</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera size={18} className="text-slate-400" />
+                    <span>Subir / Tomar Mapa</span>
+                  </>
+                )}
+              </button>
+              {formData.mapUrl && (
+                <button 
+                  type="button" 
+                  onClick={() => setFormData(prev => ({ ...prev, mapUrl: '' }))}
+                  className="p-2.5 text-rose-500 hover:bg-rose-50 rounded-xl border border-rose-200 transition-all"
+                  title="Quitar mapa"
+                >
+                  <Trash2 size={16} />
+                </button>
               )}
-            </button>
+            </div>
             <input type="file" accept="image/*,image/heic,image/heif,image/jpeg,image/png,image/webp" ref={mapInputRef} className="hidden" onChange={handleMapCapture} />
           </div>
 
-          <div className="space-y-6">
-            <div className="flex items-center justify-between px-2">
-              <span className="text-[11px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
-                 <Camera size={18} /> EVIDENCIA (MAX 4 FOTOS)
+          {/* Evidencias (Max 4 fotos) */}
+          <div className="bg-white p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200 shadow-xs space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] sm:text-[10px] font-black text-cyan-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Camera size={14} className="text-cyan-600" /> Evidencia Fotográfica (Max 4) *
               </span>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{photos.length} / 4</span>
+              <span className="text-[9px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">{photos.length} / 4</span>
             </div>
             
             <div 
-              className={`grid grid-cols-2 gap-3 transition-all duration-300 relative ${isDragging ? 'scale-[1.02] bg-indigo-50/80 border-4 border-dashed border-indigo-500 rounded-2xl p-3 shadow-lg' : 'border-2 border-transparent'}`}
+              className={`grid grid-cols-2 gap-2.5 transition-all duration-300 relative ${isDragging ? 'bg-cyan-50/80 border-2 border-dashed border-cyan-500 rounded-xl p-2' : ''}`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              {isDragging && (
-                <div className="absolute inset-0 bg-indigo-500/10 backdrop-blur-[2px] rounded-xl flex flex-col items-center justify-center pointer-events-none z-10">
-                  <div className="bg-white p-3 rounded-full shadow-md border border-indigo-200 animate-bounce">
-                    <Camera size={28} className="text-indigo-600" />
-                  </div>
-                  <span className="text-[10px] font-black uppercase text-indigo-600 mt-2 tracking-widest bg-white px-2.5 py-0.5 rounded-full shadow-sm border border-indigo-100">
-                    Suelte las fotos aquí
-                  </span>
-                </div>
-              )}
               {photos.map((p, idx) => (
-                <div key={idx} className="relative aspect-video rounded-2xl overflow-hidden border-2 border-slate-100 shadow-sm">
-                  <img src={p} className="w-full h-full object-cover" />
-                  <button type="button" onClick={() => removePhoto(idx)} className="absolute top-2 right-2 p-1.5 bg-rose-500 text-white rounded-lg shadow-lg hover:scale-110 transition-transform"><Trash2 size={14} /></button>
+                <div key={idx} className="relative aspect-video rounded-xl overflow-hidden border border-slate-200 shadow-xs bg-slate-100">
+                  <img src={p} className="w-full h-full object-cover" alt={`Evidencia ${idx + 1}`} />
+                  <button 
+                    type="button" 
+                    onClick={() => removePhoto(idx)} 
+                    className="absolute top-1.5 right-1.5 p-1 bg-rose-500 text-white rounded-md shadow-md hover:scale-105 active:scale-95 transition-all"
+                    title="Eliminar foto"
+                  >
+                    <Trash2 size={13} />
+                  </button>
                 </div>
               ))}
               {photos.length < 4 && (
@@ -436,20 +471,27 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
                   type="button" 
                   disabled={!formData.plate || isProcessingPhoto} 
                   onClick={() => evidenceInputRef.current?.click()} 
-                  className="w-full aspect-video rounded-2xl border-4 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center gap-2 text-slate-300 hover:border-indigo-400 hover:text-indigo-600 transition-all disabled:opacity-40 shadow-inner"
+                  className="w-full aspect-video rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center gap-1 text-slate-400 hover:border-cyan-500 hover:text-cyan-600 transition-all disabled:opacity-40"
                 >
-                  <Plus size={32} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">AÑADIR FOTO</span>
+                  <Plus size={22} />
+                  <span className="text-[9px] font-black uppercase tracking-wider">Añadir Foto</span>
                 </button>
               )}
             </div>
             <input type="file" accept="image/*,image/heic,image/heif,image/jpeg,image/png,image/webp" multiple ref={evidenceInputRef} className="hidden" onChange={handleAddPhoto} />
           </div>
 
-          <button type="submit" disabled={isSubmitting || isProcessingPhoto || photos.length === 0} className="w-full py-6 bg-[#0f172a] text-white font-black rounded-[2.5rem] text-sm uppercase shadow-2xl hover:bg-indigo-600 disabled:opacity-30 transition-all flex items-center justify-center gap-4 group">
-            {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : <Save size={24} />}
-            {isSubmitting ? 'REGISTRANDO...' : 'REGISTRAR LAVADO'}
-          </button>
+          {/* Botón de Enviar */}
+          <div className="pt-2">
+            <button 
+              type="submit" 
+              disabled={isSubmitting || isProcessingPhoto || photos.length === 0} 
+              className="w-full py-3.5 sm:py-4 bg-[#0f172a] hover:bg-cyan-700 text-white font-black rounded-xl sm:rounded-2xl text-xs sm:text-sm uppercase tracking-wider shadow-xl disabled:opacity-40 transition-all flex items-center justify-center gap-2.5 active:scale-98"
+            >
+              {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+              {isSubmitting ? 'REGISTRANDO...' : 'REGISTRAR LAVADO'}
+            </button>
+          </div>
         </form>
       </div>
     </div>

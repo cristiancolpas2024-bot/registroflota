@@ -1405,23 +1405,23 @@ const App: React.FC = () => {
 
 
           {activeView === 'lavados' && (
-            <div className="max-w-7xl mx-auto space-y-8 pb-20">
-               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div className="space-y-1">
-                    <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-4">
-                      <Droplets size={40} className="text-cyan-500" /> Historial de Lavados
+            <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 pb-32 px-2 sm:px-4">
+               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 sm:gap-4">
+                  <div className="space-y-0.5">
+                    <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2.5 sm:gap-3">
+                      <Droplets size={28} className="text-cyan-500 sm:w-9 sm:h-9 shrink-0" /> Historial de Lavados
                     </h2>
-                    <p className="text-[11px] text-slate-400 font-black uppercase tracking-[0.3em] ml-14">Cumplimiento de higiene y limpieza</p>
+                    <p className="text-[9px] sm:text-[11px] text-slate-400 font-black uppercase tracking-wider pl-9 sm:pl-12">Control de higiene y limpieza vehicular</p>
                   </div>
                   
-                  <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 w-full md:w-auto">
                     {/* Filtros de CD y Contratista */}
-                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4">
-                      <div className="flex items-center gap-4 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-                        <div className="flex flex-col border-r border-slate-200 pr-4">
-                          <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">CENTRO (C.D.)</span>
+                    <div className="bg-white p-2 sm:p-3 rounded-xl sm:rounded-2xl shadow-xs border border-slate-200 flex items-center gap-2 flex-1 sm:flex-none">
+                      <div className="flex items-center gap-2 px-2.5 py-1.5 bg-slate-50 rounded-lg sm:rounded-xl border border-slate-100 w-full">
+                        <div className="flex flex-col border-r border-slate-200 pr-2 sm:pr-3 flex-1 sm:flex-none">
+                          <span className="text-[7px] font-black text-slate-400 uppercase tracking-wider">CENTRO (C.D.)</span>
                           <select 
-                            className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer"
+                            className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer text-slate-800"
                             value={filterCd}
                             onChange={e => setFilterCd(e.target.value)}
                           >
@@ -1429,10 +1429,10 @@ const App: React.FC = () => {
                             {uniqueCds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
                           </select>
                         </div>
-                        <div className="flex flex-col">
-                          <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">CONTRATISTA</span>
+                        <div className="flex flex-col flex-1 sm:flex-none">
+                          <span className="text-[7px] font-black text-slate-400 uppercase tracking-wider">CONTRATISTA</span>
                           <select 
-                            className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer max-w-[120px]"
+                            className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer max-w-[100px] sm:max-w-[120px] text-slate-800"
                             value={filterContractor}
                             onChange={e => setFilterContractor(e.target.value)}
                           >
@@ -1443,22 +1443,15 @@ const App: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4">
-                      <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-                        <CalendarDays size={16} className="text-cyan-600" />
+                    {/* Periodo */}
+                    <div className="bg-white p-2 sm:p-3 rounded-xl sm:rounded-2xl shadow-xs border border-slate-200 flex items-center gap-2 flex-1 sm:flex-none">
+                      <div className="flex items-center gap-2 px-2.5 py-1.5 bg-slate-50 rounded-lg sm:rounded-xl border border-slate-100 w-full">
+                        <CalendarDays size={14} className="text-cyan-600 shrink-0" />
                         <div className="flex flex-col">
-                          <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">PERIODO SELECCIONADO</span>
-                          <div className="flex items-center gap-2">
+                          <span className="text-[7px] font-black text-slate-400 uppercase tracking-wider">PERIODO</span>
+                          <div className="flex items-center gap-1.5">
                             <select 
-                              className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer"
-                              value="MENSUAL"
-                              disabled
-                            >
-                              <option value="MENSUAL">MENSUAL</option>
-                            </select>
-                            <span className="text-slate-300">|</span>
-                            <select 
-                              className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer"
+                              className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer text-slate-800"
                               value={selectedMonth}
                               onChange={e => setSelectedMonth(e.target.value)}
                             >
@@ -1469,7 +1462,7 @@ const App: React.FC = () => {
                             </select>
                             <span className="text-slate-300">|</span>
                             <select 
-                              className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer"
+                              className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer text-slate-800"
                               value={selectedYear}
                               onChange={e => setSelectedYear(parseInt(e.target.value))}
                             >
@@ -1484,9 +1477,9 @@ const App: React.FC = () => {
 
                     <button 
                       onClick={() => setShowWashForm(true)}
-                      className="flex items-center gap-3 px-8 py-4 bg-cyan-600 text-white rounded-3xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-cyan-600/20 hover:bg-cyan-700 transition-all"
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 sm:px-6 sm:py-3.5 bg-cyan-600 text-white rounded-xl sm:rounded-2xl text-xs sm:text-sm font-black uppercase tracking-wider shadow-lg shadow-cyan-600/20 hover:bg-cyan-700 active:scale-95 transition-all"
                     >
-                      <Plus size={20}/> Registrar Lavado
+                      <Plus size={18}/> Registrar Lavado
                     </button>
                   </div>
                </div>
@@ -1494,12 +1487,12 @@ const App: React.FC = () => {
                <WashStats 
                  totalFlota={filteredVehiclesForWash.length}
                  lavados={filteredWashReports.length}
-                 pendientes={filteredVehiclesForWash.length - filteredWashReports.length}
+                 pendientes={Math.max(0, filteredVehiclesForWash.length - filteredWashReports.length)}
                  busqueda={filteredWashReports.length}
                  month={selectedMonth}
                />
 
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-6">
                   {filteredWashReports.map(r => (
                       <WashCard 
                         key={r.id} 
@@ -1509,9 +1502,9 @@ const App: React.FC = () => {
                     ))
                   }
                   {filteredWashReports.length === 0 && (
-                    <div className="col-span-full bg-white rounded-[3rem] p-20 text-center border-2 border-dashed border-slate-200">
-                      <Droplets size={48} className="mx-auto text-slate-200 mb-4" />
-                      <p className="text-slate-400 font-black uppercase tracking-widest text-sm">No se han encontrado lavados con los filtros aplicados para {selectedMonth}</p>
+                    <div className="col-span-full bg-white rounded-2xl sm:rounded-3xl p-10 sm:p-16 text-center border-2 border-dashed border-slate-200">
+                      <Droplets size={36} className="mx-auto text-slate-300 mb-3" />
+                      <p className="text-slate-500 font-bold uppercase tracking-wider text-xs sm:text-sm">No se han encontrado lavados con los filtros aplicados para {selectedMonth}</p>
                     </div>
                   )}
                </div>
