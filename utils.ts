@@ -109,54 +109,64 @@ export const processImageWithWatermark = (
   customDate?: string
 ): Promise<string> => {
   return new Promise((resolve) => {
+    if (!base64Str) return resolve("");
     const img = new Image();
     img.src = base64Str;
     img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const maxWidth = 2048; 
-      let width = img.width;
-      let height = img.height;
-      if (width > maxWidth) {
-        height = (maxWidth / width) * height;
-        width = maxWidth;
+      try {
+        const canvas = document.createElement('canvas');
+        const maxWidth = 2048; 
+        let width = img.width || 1280;
+        let height = img.height || 720;
+        if (width > maxWidth) {
+          height = (maxWidth / width) * height;
+          width = maxWidth;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(base64Str);
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        const padding = width * 0.03;
+        const boxWidth = width * 0.55; 
+        const boxHeight = height * 0.22; 
+        const x = width - boxWidth - padding;
+        const y = height - boxHeight - padding;
+        
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.fillRect(x, y, boxWidth, boxHeight);
+        
+        // Use custom date if provided, otherwise use current date
+        // We use T12:00:00 to avoid timezone shifts when parsing YYYY-MM-DD
+        let timestamp = "";
+        try {
+          const dateToUse = customDate ? new Date(customDate + "T12:00:00") : new Date();
+          timestamp = isNaN(dateToUse.getTime()) 
+            ? new Date().toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            : dateToUse.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        } catch {
+          timestamp = new Date().toLocaleDateString('es-CO');
+        }
+        
+        const safeText = String(text || 'CALIBRACIÓN').toUpperCase();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `bold ${Math.round(width * 0.05)}px Inter, sans-serif`; 
+        ctx.fillText(safeText, x + 25, y + 50);
+        
+        ctx.font = `${Math.round(width * 0.035)}px Inter, sans-serif`; 
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.fillText(timestamp, x + 25, y + 100);
+        
+        if (coords && typeof coords.lat === 'number' && typeof coords.lng === 'number') {
+          ctx.fillStyle = '#818cf8';
+          ctx.fillText(`${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`, x + 25, y + 145);
+        }
+        resolve(canvas.toDataURL('image/jpeg', 0.95)); 
+      } catch (err) {
+        console.warn("Watermark processing failed, using raw image:", err);
+        resolve(base64Str);
       }
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return resolve(base64Str);
-      ctx.drawImage(img, 0, 0, width, height);
-      
-      const padding = width * 0.03;
-      const boxWidth = width * 0.55; 
-      const boxHeight = height * 0.22; 
-      const x = width - boxWidth - padding;
-      const y = height - boxHeight - padding;
-      
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-      ctx.fillRect(x, y, boxWidth, boxHeight);
-      
-      // Use custom date if provided, otherwise use current date
-      // We use T12:00:00 to avoid timezone shifts when parsing YYYY-MM-DD
-      const dateToUse = customDate ? new Date(customDate + "T12:00:00") : new Date();
-      const timestamp = dateToUse.toLocaleDateString('es-CO', { 
-        day: '2-digit', 
-        month: '2-digit', 
-        year: 'numeric' 
-      });
-      
-      ctx.fillStyle = '#ffffff';
-      ctx.font = `bold ${Math.round(width * 0.05)}px Inter, sans-serif`; 
-      ctx.fillText(text.toUpperCase(), x + 25, y + 50);
-      
-      ctx.font = `${Math.round(width * 0.035)}px Inter, sans-serif`; 
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.fillText(timestamp, x + 25, y + 100);
-      
-      if (coords) {
-        ctx.fillStyle = '#818cf8';
-        ctx.fillText(`${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`, x + 25, y + 145);
-      }
-      resolve(canvas.toDataURL('image/jpeg', 0.95)); 
     };
     img.onerror = () => resolve(base64Str);
   });

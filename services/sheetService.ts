@@ -73,9 +73,9 @@ const fetchDataFromGAS = async (docId: string, sheetName?: string, scriptUrl: st
     let url = `${scriptUrl}?method=GET_DATA&docId=${docId}`;
     if (sheetName) url += `&sheetName=${encodeURIComponent(sheetName)}`;
     
-    // Timeout ultra-rápido de 6s para no bloquear la app si GAS está saturado o tarda
+    // Timeout de 15s para dar margen suficiente a Google Apps Script
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000); 
+    const timeoutId = setTimeout(() => controller.abort(), 15000); 
 
     const response = await fetch(url, { 
       method: 'GET',
@@ -1293,7 +1293,7 @@ export const fetchUnavailabilityFromSheet = async (): Promise<UnavailabilityReco
         };
       });
   } catch (e) {
-    console.error("Error fetching unavail from GAS:", e);
+    console.warn("Error fetching unavail from GAS:", e);
     return fetchUnavailabilityFromSheetCSV();
   }
 };
@@ -1491,7 +1491,7 @@ export const fetchCorrectivesFromSheet = async (): Promise<Corrective[]> => {
     const headers = rows[0].map((h: any) => cleanSheetValue(h).toUpperCase());
     return processCorrectiveRows(rows, headers);
   } catch (e) {
-    console.error("Error fetching correctives from GAS:", e);
+    console.warn("Error fetching correctives from GAS:", e);
     return fetchCorrectivesFromSheetCSV();
   }
 };
@@ -1768,57 +1768,63 @@ export const submitFineToSheet = async (data: any): Promise<boolean> => {
 };
 
 export const fetchOperatorsFromSheet = async (): Promise<OperatorRecord[]> => {
-  try {
-    const rows = await fetchDataFromGAS(OPERATORS_DOC_ID); // Get first sheet by default if MAESTRO name is wrong
-    
-    if (!rows || rows.length < 2) {
-      console.warn("GAS fetch operators failed, attempting CSV fallback");
-      return fetchOperatorsFromSheetCSV();
-    }
+  const parseDays = (val: any): number => {
+    const cleaned = cleanSheetValue(val).replace(/[,.]/g, '');
+    return parseInt(cleaned) || 0;
+  };
 
-    const parseDays = (val: any): number => {
-      const cleaned = cleanSheetValue(val).replace(/[,.]/g, '');
-      return parseInt(cleaned) || 0;
-    };
+  const HEADER_IDENTIFIER = "NOMBRES Y APELLIDOS";
 
-    const HEADER_IDENTIFIER = "NOMBRES Y APELLIDOS";
+  const mapOperators = (rows: any[][]): OperatorRecord[] => {
     return rows.slice(1)
       .filter(row => row && row[3] && cleanSheetValue(row[3]) !== "" && cleanSheetValue(row[3]).toUpperCase() !== HEADER_IDENTIFIER)
       .map((row, i): OperatorRecord => {
-      return {
-        id: `op-${i}-${cleanSheetValue(row[3])}-${cleanSheetValue(row[4])}`,
-        cd: cleanSheetValue(row[12]),
-        provider: cleanSheetValue(row[2]),
-        name: cleanSheetValue(row[3]),
-        identification: cleanSheetValue(row[4]),
-        position: cleanSheetValue(row[5]),
-        hireDate: parseFlexibleDate(row[7]),
-        licenseExpiry: parseFlexibleDate(row[14]),
-        licenseDaysPending: parseDays(row[15]),
-        category: cleanSheetValue(row[16]),
-        restrictions: cleanSheetValue(row[17]),
-        fines: cleanSheetValue(row[18]),
-        courseExpiry: parseFlexibleDate(row[22]),
-        courseDaysPending: parseDays(row[23]),
-        entity: cleanSheetValue(row[24]),
-        examStatus: cleanSheetValue(row[25]),
-        examExpiry: parseFlexibleDate(row[26]),
-        examDaysPending: parseDays(row[27]),
-        opmCourseDate: parseFlexibleDate(row[28]),
-        opmExpiry: parseFlexibleDate(row[29]),
-        opmDaysPending: parseDays(row[30]),
-        opmEntity: cleanSheetValue(row[31]),
-        licenseUrl: cleanSheetValue(row[32]),
-        courseUrl: cleanSheetValue(row[33]),
-        examUrl: cleanSheetValue(row[34]),
-        opmUrl: cleanSheetValue(row[35]),
-        photoUrl: cleanSheetValue(row[36])
-      };
-    });
+        return {
+          id: `op-${i}-${cleanSheetValue(row[3])}-${cleanSheetValue(row[4])}`,
+          cd: cleanSheetValue(row[1]) || cleanSheetValue(row[12]),
+          provider: cleanSheetValue(row[2]),
+          name: cleanSheetValue(row[3]),
+          identification: cleanSheetValue(row[4]),
+          position: cleanSheetValue(row[5]),
+          hireDate: parseFlexibleDate(row[7]),
+          licenseExpiry: parseFlexibleDate(row[14]),
+          licenseDaysPending: parseDays(row[15]),
+          category: cleanSheetValue(row[16]),
+          restrictions: cleanSheetValue(row[17]),
+          fines: cleanSheetValue(row[18]),
+          courseExpiry: parseFlexibleDate(row[22]),
+          courseDaysPending: parseDays(row[23]),
+          entity: cleanSheetValue(row[24]),
+          examStatus: cleanSheetValue(row[25]),
+          examExpiry: parseFlexibleDate(row[26]),
+          examDaysPending: parseDays(row[27]),
+          opmCourseDate: parseFlexibleDate(row[28]),
+          opmExpiry: parseFlexibleDate(row[29]),
+          opmDaysPending: parseDays(row[30]),
+          opmEntity: cleanSheetValue(row[31]),
+          licenseUrl: cleanSheetValue(row[32]),
+          courseUrl: cleanSheetValue(row[33]),
+          examUrl: cleanSheetValue(row[34]),
+          opmUrl: cleanSheetValue(row[35]),
+          photoUrl: cleanSheetValue(row[36])
+        };
+      });
+  };
+
+  try {
+    let rows = await fetchDataFromGAS(OPERATORS_DOC_ID);
+    if (!rows || rows.length < 2) {
+      rows = await fetchDataFromGAS(OPERATORS_DOC_ID, undefined, OPERATIONAL_SCRIPT_URL);
+    }
+    if (rows && rows.length >= 2) {
+      const records = mapOperators(rows);
+      if (records.length > 0) return records;
+    }
   } catch (e) {
-    console.error("Error fetching operators from GAS:", e);
-    return fetchOperatorsFromSheetCSV();
+    console.warn("GAS fetch operators failed:", e);
   }
+
+  return fetchOperatorsFromSheetCSV();
 };
 
 export const fetchAuditMasterListFromSheet = async (): Promise<AuditMasterVehicle[]> => {
@@ -1911,13 +1917,13 @@ const fetchOperatorsFromSheetCSV = async (): Promise<OperatorRecord[]> => {
           resolve(operators);
         },
         error: (err) => {
-          console.error("PapaParse error (operators):", err);
+          console.warn("PapaParse error (operators):", err);
           resolve([]);
         }
       });
     });
   } catch (e) {
-    console.error("Error fetching operators CSV:", e);
+    console.warn("Error fetching operators CSV:", e);
     return [];
   }
 };
@@ -1927,22 +1933,15 @@ export const submitControlTowerUpdateToSheet = async (data: any): Promise<boolea
 };
 
 export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]> => {
-  try {
-    const rows = await fetchDataFromGAS(CONTROL_TOWER_DOC_ID, 'CIERRE DE NOVEDADES');
-    
-    if (!rows || rows.length < 2) {
-      console.warn("GAS fetch control tower failed, attempting CSV fallback");
-      return fetchControlTowerFromSheetCSV();
-    }
+  const parseNum = (val: any) => {
+    const clean = cleanSheetValue(val).replace('%', '').replace(',', '.').trim();
+    return parseFloat(clean) || 0;
+  };
 
+  const mapControlTower = (rows: any[][]): ControlTowerRecord[] => {
     return rows.slice(1)
       .filter(row => row && row[5]) // Placa en indice 5
       .map((row, i): ControlTowerRecord => {
-        const parseNum = (val: any) => {
-          const clean = cleanSheetValue(val).replace('%', '').replace(',', '.').trim();
-          return parseFloat(clean) || 0;
-        };
-
         return {
           id: `ct-${i}-${cleanSheetValue(row[5])}`,
           contractor: cleanSheetValue(row[0]),
@@ -1968,10 +1967,22 @@ export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]
           evidenceAfter: cleanSheetValue(row[20]),
         };
       });
+  };
+
+  try {
+    let rows = await fetchDataFromGAS(CONTROL_TOWER_DOC_ID, 'CIERRE DE NOVEDADES', OPERATIONAL_SCRIPT_URL);
+    if (!rows || rows.length < 2) {
+      rows = await fetchDataFromGAS(CONTROL_TOWER_DOC_ID, 'CIERRE DE NOVEDADES', GOOGLE_SCRIPT_WEB_APP_URL);
+    }
+    if (rows && rows.length >= 2) {
+      const records = mapControlTower(rows);
+      if (records.length > 0) return records;
+    }
   } catch (e) {
-    console.error("Error fetching control tower from GAS:", e);
-    return fetchControlTowerFromSheetCSV();
+    console.warn("GAS fetch control tower failed:", e);
   }
+
+  return fetchControlTowerFromSheetCSV();
 };
 
 const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> => {
@@ -1992,14 +2003,14 @@ const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> =>
           const rows = results.data as any[][];
           if (!rows || rows.length < 2) { resolve([]); return; }
 
+          const parseNum = (val: any) => {
+            const clean = cleanSheetValue(val).replace('%', '').replace(',', '.').trim();
+            return parseFloat(clean) || 0;
+          };
+
           const records = rows.slice(1)
             .filter(row => row && row[5]) // Placa en indice 5
             .map((row, i): ControlTowerRecord => {
-              const parseNum = (val: any) => {
-                const clean = cleanSheetValue(val).replace('%', '').replace(',', '.').trim();
-                return parseFloat(clean) || 0;
-              };
-
               return {
                 id: `ct-${i}-${cleanSheetValue(row[5])}`,
                 contractor: cleanSheetValue(row[0]),
@@ -2028,13 +2039,13 @@ const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> =>
           resolve(records);
         },
         error: (err) => {
-          console.error("PapaParse error (control tower):", err);
+          console.warn("PapaParse error (control tower):", err);
           resolve([]);
         }
       });
     });
   } catch (e) {
-    console.error("Error fetching control tower CSV:", e);
+    console.warn("Error fetching control tower CSV:", e);
     return [];
   }
 };
@@ -2066,7 +2077,7 @@ export const fetchAuditRecordsFromSheet = async (): Promise<AuditRecord[]> => {
 
     return processAuditRows(rows);
   } catch (e) {
-    console.error("Error fetching audits from GAS:", e);
+    console.warn("Error fetching audits from GAS:", e);
     return fetchAuditRecordsFromSheetCSV();
   }
 };
@@ -2120,7 +2131,7 @@ export const fetchFleetStandardAuditFromSheet = async (): Promise<FleetStandardA
     }
     return fetchFleetStandardAuditFromSheetCSV();
   } catch (e) {
-    console.error("Error fetching Fleet Standard audits from GAS:", e);
+    console.warn("Error fetching Fleet Standard audits from GAS:", e);
     return fetchFleetStandardAuditFromSheetCSV();
   }
 };
@@ -2269,14 +2280,14 @@ const processAuditRows = (rows: any[][]): AuditRecord[] => {
 export const fetchSparePartsFromSheet = async (): Promise<SparePartRecord[]> => {
   try {
     const rows = await fetchDataFromGAS(SPARE_PARTS_DOC_ID, 'REPUESTO', SPARE_PARTS_SCRIPT_URL);
-    if (!rows || rows.length < 2) {
-      return fetchSparePartsFromSheetCSV();
+    if (rows && rows.length >= 2) {
+      return processSparePartRows(rows);
     }
-    return processSparePartRows(rows);
   } catch (e) {
-    console.warn("GAS fetch spare parts failed, attempting CSV fallback:", e);
-    return fetchSparePartsFromSheetCSV();
+    console.warn("GAS fetch spare parts failed:", e);
   }
+
+  return fetchSparePartsFromSheetCSV();
 };
 
 const fetchSparePartsFromSheetCSV = async (): Promise<SparePartRecord[]> => {
@@ -2299,7 +2310,7 @@ const fetchSparePartsFromSheetCSV = async (): Promise<SparePartRecord[]> => {
       });
     });
   } catch (e) {
-    console.error("Error fetching spare parts CSV:", e);
+    console.warn("Error fetching spare parts CSV:", e);
     return [];
   }
 };
@@ -2419,14 +2430,18 @@ export const fetchNoveltyReportsFromSheet = async (): Promise<NoveltyReport[]> =
         evidenciaCierre2: cleanSheetValue(r[12]),
       }));
 
-  // Intentar Apps Script por gid; si no, CSV por gid
+  // 1. Intentar Apps Script
   try {
-    const rows = await fetchDataFromGAS(docId, 'NOVEDADES', OPERATIONAL_SCRIPT_URL);
+    let rows = await fetchDataFromGAS(docId, 'NOVEDADES', OPERATIONAL_SCRIPT_URL);
+    if (!rows || rows.length < 2) {
+      rows = await fetchDataFromGAS(docId, 'NOVEDADES', GOOGLE_SCRIPT_WEB_APP_URL);
+    }
     if (rows && rows.length >= 2) return map(rows);
   } catch (e) { 
-    console.warn("GAS fetch novelty reports failed, trying CSV fallback:", e);
+    console.warn("GAS fetch novelty reports failed, trying fallbacks:", e);
   }
 
+  // 2. Fallback CSV
   try {
     const url = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${GID}${getCacheBuster()}`;
     const resp = await fetch(url, { mode: 'cors', credentials: 'omit' });
@@ -2436,7 +2451,7 @@ export const fetchNoveltyReportsFromSheet = async (): Promise<NoveltyReport[]> =
       return map(parsed.data as any[][]);
     }
   } catch (e) { 
-    console.error("Error fetching novelty reports CSV:", e);
+    console.warn("Error fetching novelty reports CSV:", e);
   }
 
   return [];

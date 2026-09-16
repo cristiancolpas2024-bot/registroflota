@@ -135,12 +135,12 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({
 
   // Unique CDs for quick filter
   const uniqueCds = useMemo(() => {
-    const list = Array.from(new Set(vehicles.map(v => (v.cd || 'GENERAL').toUpperCase().trim()))).filter(Boolean);
+    const list = Array.from(new Set((vehicles || []).map(v => String(v?.cd || 'GENERAL').toUpperCase().trim()))).filter(Boolean);
     return list.sort();
   }, [vehicles]);
 
   const handlePlateSelect = (selectedPlate: string) => {
-    const v = vehicles.find(veh => veh.plate === selectedPlate);
+    const v = (vehicles || []).find(veh => String(veh?.plate || '').toUpperCase() === selectedPlate.toUpperCase());
     setFormData(prev => ({
       ...prev,
       plate: selectedPlate,
@@ -149,39 +149,42 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({
     }));
   };
 
-  // Filtered vehicles for plate selection
+  // Filtered vehicles for plate selection - safely guarded against null/undefined
   const filteredVehicles = useMemo(() => {
-    let list = [...vehicles].filter(v => {
-      const vCd = (v.cd || 'GENERAL').toUpperCase().trim();
+    let list = (vehicles || []).filter(v => {
+      if (!v || !v.plate) return false;
+      const vCd = String(v.cd || 'GENERAL').toUpperCase().trim();
       return filterCd === 'all' || normalizeStr(vCd) === normalizeStr(filterCd);
     });
 
     if (plateSearch) {
       const search = plateSearch.toUpperCase().trim();
-      list = list.filter(v => v.plate.includes(search));
+      list = list.filter(v => String(v.plate || '').toUpperCase().includes(search));
     }
 
-    return list.sort((a, b) => a.plate.localeCompare(b.plate));
+    return list.sort((a, b) => String(a.plate || '').localeCompare(String(b.plate || '')));
   }, [vehicles, filterCd, plateSearch]);
-
-  // Auto-select if only one result and user typed 3+ chars
-  useEffect(() => {
-    if (filteredVehicles.length === 1 && formData.plate !== filteredVehicles[0].plate && plateSearch.length >= 3) {
-      handlePlateSelect(filteredVehicles[0].plate);
-    }
-  }, [filteredVehicles, plateSearch, formData.plate]);
 
   const handleDateChange = (newDate: string) => {
     if (!newDate) return;
-    const dateObj = new Date(newDate + 'T12:00:00');
-    const monthName = dateObj.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
-    const weekStr = `SEMANA ${getWeekNumber(dateObj)}`;
-    setFormData(prev => ({
-      ...prev,
-      calibrationDate: newDate,
-      month: monthName,
-      week: weekStr
-    }));
+    try {
+      const dateObj = new Date(newDate + 'T12:00:00');
+      if (isNaN(dateObj.getTime())) {
+        setFormData(prev => ({ ...prev, calibrationDate: newDate }));
+        return;
+      }
+      const monthName = dateObj.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
+      const weekNum = getWeekNumber(dateObj);
+      const weekStr = isNaN(weekNum) ? 'SEMANA 1' : `SEMANA ${weekNum}`;
+      setFormData(prev => ({
+        ...prev,
+        calibrationDate: newDate,
+        month: monthName,
+        week: weekStr
+      }));
+    } catch {
+      setFormData(prev => ({ ...prev, calibrationDate: newDate }));
+    }
   };
 
   const getCoords = (): Promise<{ lat: number; lng: number } | undefined> => {
@@ -210,32 +213,36 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({
     }
 
     setIsProcessingPhoto(true);
-    const coords = await getCoords();
+    try {
+      const coords = await getCoords();
 
-    const fileArray = Array.from(files);
-    for (const file of fileArray) {
-      if (capturedPhotos.length >= 8) break;
-      if (!file.type.startsWith('image/') && !file.name.match(/\.(jpe?g|png|webp|heic|heif)$/i)) continue;
+      const fileArray = Array.from(files);
+      for (const file of fileArray) {
+        if (capturedPhotos.length >= 8) break;
+        if (!file.type.startsWith('image/') && !file.name.match(/\.(jpe?g|png|webp|heic|heif)$/i)) continue;
 
-      try {
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
+        try {
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
 
-        // Watermark with plate, date, coords, and compress
-        const watermarked = await processImageWithWatermark(base64, formData.plate, coords, formData.calibrationDate);
-        setCapturedPhotos(prev => [...prev, watermarked].slice(0, 8));
-      } catch (err) {
-        console.error("Error al procesar foto:", err);
+          // Watermark with plate, date, coords, and compress
+          const watermarked = await processImageWithWatermark(base64, formData.plate, coords, formData.calibrationDate);
+          setCapturedPhotos(prev => [...prev, watermarked].slice(0, 8));
+        } catch (err) {
+          console.error("Error al procesar foto:", err);
+        }
       }
+    } catch (e) {
+      console.error("Error global en processIncomingFiles:", e);
+    } finally {
+      setIsProcessingPhoto(false);
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
-
-    setIsProcessingPhoto(false);
-    if (cameraInputRef.current) cameraInputRef.current.value = '';
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -378,7 +385,15 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({
       )}
 
       {/* Form Fields */}
-      <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+      <form 
+        onSubmit={handleSubmit} 
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+            e.preventDefault();
+          }
+        }}
+        className="p-4 sm:p-6 space-y-4 sm:space-y-5"
+      >
         
         {/* 1. FECHA DE CALIBRACIÓN */}
         <div className="space-y-1.5">
@@ -579,20 +594,38 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({
             </span>
           </div>
 
-          {/* WhatsApp Camera Action Banner */}
+          {/* Action Banner for Photos */}
           <div className="bg-gradient-to-br from-emerald-50 via-teal-50/50 to-white p-3 rounded-2xl border border-emerald-200 shadow-xs space-y-2.5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {/* WhatsApp Camera Button (Continuous shooting) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {/* Live Camera Button */}
               <button
                 type="button"
                 onClick={openWhatsAppCamera}
                 disabled={isProcessingPhoto || capturedPhotos.length >= 8}
-                className="py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-emerald-600/25 transition-all disabled:opacity-50 cursor-pointer"
+                className="py-3 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/25 transition-all disabled:opacity-50 cursor-pointer"
+                title="Cámara en vivo continua"
               >
-                <Camera size={18} /> Cámara WhatsApp (Rápida)
+                <Camera size={16} /> Cámara Rápida
               </button>
 
-              {/* Multi-gallery file selection button */}
+              {/* Native Device Camera Button (100% reliable fallback) */}
+              <button
+                type="button"
+                disabled={isProcessingPhoto || capturedPhotos.length >= 8}
+                onClick={() => {
+                  if (!formData.plate) {
+                    alert("Por favor seleccione primero la placa del vehículo antes de capturar fotos.");
+                    return;
+                  }
+                  cameraInputRef.current?.click();
+                }}
+                className="py-3 px-3 bg-teal-600 hover:bg-teal-700 active:scale-98 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-teal-600/25 transition-all disabled:opacity-50 cursor-pointer"
+                title="Tomar con la app de cámara del teléfono"
+              >
+                <Camera size={16} /> Cámara Teléfono
+              </button>
+
+              {/* Gallery file selection button */}
               <button
                 type="button"
                 disabled={isProcessingPhoto || capturedPhotos.length >= 8}
@@ -603,14 +636,15 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({
                   }
                   fileInputRef.current?.click();
                 }}
-                className="py-3.5 px-4 bg-white hover:bg-slate-50 active:scale-98 text-slate-700 border border-slate-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+                className="py-3 px-3 bg-white hover:bg-slate-50 active:scale-98 text-slate-700 border border-slate-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+                title="Seleccionar imágenes del dispositivo"
               >
-                <ImageIcon size={18} className="text-indigo-600" /> Galería (Múltiple)
+                <ImageIcon size={16} className="text-indigo-600" /> Galería
               </button>
             </div>
 
             <p className="text-[9px] font-bold text-slate-500 text-center uppercase tracking-wider">
-              Dispara fotos continuas sin salir de la cámara o selecciona varias de la galería a la vez
+              Toma fotos con la cámara en vivo, con la cámara de tu teléfono o selecciona de la galería
             </p>
           </div>
 
@@ -638,9 +672,8 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({
               onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
               onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
               onDrop={handleDrop}
-              onClick={openWhatsAppCamera}
-              className={`p-6 border-2 border-dashed rounded-2xl text-center cursor-pointer transition-all ${
-                isDragging ? 'border-emerald-500 bg-emerald-50/50' : 'border-slate-200 hover:border-emerald-400 bg-slate-50/60'
+              className={`p-6 border-2 border-dashed rounded-2xl text-center transition-all ${
+                isDragging ? 'border-emerald-500 bg-emerald-50/50' : 'border-slate-200 bg-slate-50/60'
               }`}
             >
               {isProcessingPhoto ? (
@@ -649,12 +682,14 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({
                   <span className="text-xs font-black uppercase">Procesando y optimizando imagen...</span>
                 </div>
               ) : (
-                <div className="flex flex-col items-center gap-1.5 text-slate-400">
-                  <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mb-1">
+                <div className="flex flex-col items-center gap-2 text-slate-400">
+                  <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
                     <Camera size={22} />
                   </div>
-                  <p className="text-xs font-black uppercase text-slate-700">Toca para abrir la cámara continua</p>
-                  <p className="text-[10px] text-slate-400">Toma varias fotos seguidas de las llantas o selecciona de la galería</p>
+                  <p className="text-xs font-black uppercase text-slate-700">Sin fotos adjuntas aún</p>
+                  <p className="text-[10px] text-slate-400 max-w-xs mx-auto">
+                    Usa los botones superiores para capturar evidencia o arrastra imágenes aquí
+                  </p>
                 </div>
               )}
             </div>

@@ -79,16 +79,25 @@ const WhatsAppCameraModal: React.FC<WhatsAppCameraModalProps> = ({
       }
 
       try {
-        const constraints: MediaStreamConstraints = {
-          video: {
-            facingMode: { ideal: facingMode },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
-          },
-          audio: false
-        };
+        let mediaStream: MediaStream;
+        try {
+          const constraints: MediaStreamConstraints = {
+            video: {
+              facingMode: { ideal: facingMode },
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            },
+            audio: false
+          };
+          mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (initialErr) {
+          console.warn("Retrying camera with generic constraints:", initialErr);
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: facingMode } },
+            audio: false
+          });
+        }
 
-        const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
         if (!isMounted) {
           mediaStream.getTracks().forEach((t) => t.stop());
           return;
@@ -155,37 +164,49 @@ const WhatsAppCameraModal: React.FC<WhatsAppCameraModalProps> = ({
     if (!videoRef.current || isProcessing || photos.length >= maxPhotos) return;
 
     const video = videoRef.current;
-    if (video.videoWidth === 0 || video.videoHeight === 0) return;
+    if (!video.videoWidth || !video.videoHeight) {
+      // If live camera is not ready yet, trigger native system camera
+      systemCameraInputRef.current?.click();
+      return;
+    }
 
-    // Flash screen effect
+    // Gentle flash effect (non-blinding, never stays stuck)
     setFlashAnimation(true);
-    setTimeout(() => setFlashAnimation(false), 120);
+    setTimeout(() => setFlashAnimation(false), 70);
 
     // Haptic feedback
     if (navigator.vibrate) {
       try { navigator.vibrate(40); } catch (_) {}
     }
 
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    if (facingMode === 'user') {
-      ctx.translate(canvas.width, 0);
-      ctx.scale(-1, 1);
-    }
-
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const rawBase64 = canvas.toDataURL('image/jpeg', 0.85);
-
     setIsProcessing(true);
     try {
-      const stamped = await processImageWithWatermark(rawBase64, plate, coordsRef.current, calibrationDate);
-      setPhotos((prev) => [...prev, stamped].slice(0, maxPhotos));
-    } catch (e) {
-      setPhotos((prev) => [...prev, rawBase64].slice(0, maxPhotos));
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 720;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        setIsProcessing(false);
+        return;
+      }
+
+      if (facingMode === 'user') {
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+      }
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const rawBase64 = canvas.toDataURL('image/jpeg', 0.85);
+
+      try {
+        const stamped = await processImageWithWatermark(rawBase64, plate, coordsRef.current, calibrationDate);
+        setPhotos((prev) => [...prev, stamped].slice(0, maxPhotos));
+      } catch (watermarkErr) {
+        console.warn("Watermark error in captureFrame, using raw photo:", watermarkErr);
+        setPhotos((prev) => [...prev, rawBase64].slice(0, maxPhotos));
+      }
+    } catch (err) {
+      console.error("Error en captureFrame:", err);
     } finally {
       setIsProcessing(false);
     }
@@ -247,7 +268,7 @@ const WhatsAppCameraModal: React.FC<WhatsAppCameraModalProps> = ({
       
       {/* Visual Flash effect overlay */}
       {flashAnimation && (
-        <div className="absolute inset-0 bg-white z-50 pointer-events-none transition-opacity duration-150 animate-out fade-out" />
+        <div className="absolute inset-0 bg-white/40 z-50 pointer-events-none transition-opacity duration-75" />
       )}
 
       {/* TOP BAR */}

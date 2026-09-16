@@ -50,6 +50,7 @@ import ExecutiveAuditDashboard from './components/ExecutiveAuditDashboard';
 import CalibrationVisuals from './components/CalibrationVisuals';
 import SparePartsModule from './components/SparePartsModule';
 import NoveltyReportModule from './components/NoveltyReportModule';
+import ErrorBoundary from './components/ErrorBoundary';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, ReferenceLine, LabelList
@@ -288,7 +289,7 @@ const App: React.FC = () => {
         })
       );
     } catch (globalErr) {
-      console.error("Critical error in parallel state synchronization:", globalErr);
+      console.warn("Critical error in parallel state synchronization:", globalErr);
     } finally {
       setIsSyncing(false);
     }
@@ -486,14 +487,15 @@ const App: React.FC = () => {
   }, [reports, selectedYear]);
 
   const filteredCalibrations = useMemo(() => {
-    return calibrations.filter(c => {
-      const vehicle = vehicles.find(v => normalizePlate(v.plate) === normalizePlate(c.plate));
-      const cMonth = (c.month || "").trim().toUpperCase();
-      const sMonth = selectedMonth.trim().toUpperCase();
+    return (calibrations || []).filter(c => {
+      if (!c) return false;
+      const vehicle = (vehicles || []).find(v => normalizePlate(v?.plate) === normalizePlate(c?.plate));
+      const cMonth = String(c.month || "").trim().toUpperCase();
+      const sMonth = String(selectedMonth || "").trim().toUpperCase();
       const matchMonth = selectedMonth === 'TODOS' || cMonth === sMonth || cMonth.includes(sMonth) || sMonth.includes(cMonth);
       const matchYear = c.year === selectedYear;
-      const matchCd = filterCd === 'all' || (vehicle && vehicle.cd === filterCd) || (c.cd && c.cd.toUpperCase().trim() === filterCd.toUpperCase().trim());
-      const matchContractor = filterContractor === 'all' || (vehicle && vehicle.contractor === filterContractor) || (c.contractor && c.contractor.toUpperCase().trim() === filterContractor.toUpperCase().trim());
+      const matchCd = filterCd === 'all' || (vehicle && vehicle.cd === filterCd) || (c.cd && String(c.cd).toUpperCase().trim() === String(filterCd).toUpperCase().trim());
+      const matchContractor = filterContractor === 'all' || (vehicle && vehicle.contractor === filterContractor) || (c.contractor && String(c.contractor).toUpperCase().trim() === String(filterContractor).toUpperCase().trim());
       const matchSearch = normalizePlate(c.plate).includes(normalizePlate(searchTerm));
       return matchMonth && matchYear && matchCd && matchContractor && matchSearch;
     });
@@ -503,11 +505,11 @@ const App: React.FC = () => {
     return {
       total: filteredCalibrations.length,
       completed: filteredCalibrations.filter(c => {
-        const est = (c.estado || "").toUpperCase().trim();
+        const est = String(c?.estado || "").toUpperCase().trim();
         return est === 'COMPLETADO' || est === 'CERRADO' || est === 'REALIZADO' || est === 'OK';
       }).length,
       pending: filteredCalibrations.filter(c => {
-        const est = (c.estado || "").toUpperCase().trim();
+        const est = String(c?.estado || "").toUpperCase().trim();
         return !(est === 'COMPLETADO' || est === 'CERRADO' || est === 'REALIZADO' || est === 'OK');
       }).length,
       searchCount: filteredCalibrations.length
@@ -1445,14 +1447,20 @@ const App: React.FC = () => {
 
           {activeView === 'calibraciones' && (
             <div className="max-w-xl mx-auto py-2 sm:py-6 pb-32 px-2 sm:px-4">
-              <CalibrationForm 
-                isInline={true}
-                vehicles={vehicles} 
-                onSubmit={async (d) => { 
-                  await submitCalibrationToSheet(d); 
-                  handleSyncData(); 
-                }} 
-              />
+              <ErrorBoundary fallbackMessage="Error en el módulo de calibración">
+                <CalibrationForm 
+                  isInline={true}
+                  vehicles={vehicles} 
+                  onSubmit={async (d) => { 
+                    try {
+                      await submitCalibrationToSheet(d); 
+                      handleSyncData(); 
+                    } catch (err) {
+                      console.error("Error al registrar calibración:", err);
+                    }
+                  }} 
+                />
+              </ErrorBoundary>
             </div>
           )}
 
@@ -1658,22 +1666,28 @@ const App: React.FC = () => {
       {showCleaningForm && <CleaningForm vehicles={vehicles} onClose={() => setShowCleaningForm(false)} onSubmit={async (d) => { await submitCleaningToSheet(d); handleSyncData(); }} />}
       {closingCleaning && <CleaningForm vehicles={vehicles} preSelectedPlate={closingCleaning.plate} initialDate={closingCleaning.date} onClose={() => setClosingCleaning(null)} onSubmit={async (d) => { await submitCleaningToSheet(d); handleSyncData(); }} />}
       {showCalibrationForm && activeView !== 'calibraciones' && (
-        <CalibrationForm 
-          vehicles={vehicles} 
-          calibrationToUpdate={updatingCalibration || undefined}
-          onClose={() => {
-            setShowCalibrationForm(false);
-            setUpdatingCalibration(null);
-          }} 
-          onSubmit={async (d: any) => { 
-            if (d.isUpdate) {
-              await submitCalibrationUpdateToSheet(d);
-            } else {
-              await submitCalibrationToSheet(d);
-            }
-            handleSyncData(); 
-          }} 
-        />
+        <ErrorBoundary fallbackMessage="Error en el formulario de calibración" onReset={() => setShowCalibrationForm(false)}>
+          <CalibrationForm 
+            vehicles={vehicles} 
+            calibrationToUpdate={updatingCalibration || undefined}
+            onClose={() => {
+              setShowCalibrationForm(false);
+              setUpdatingCalibration(null);
+            }} 
+            onSubmit={async (d: any) => { 
+              try {
+                if (d.isUpdate) {
+                  await submitCalibrationUpdateToSheet(d);
+                } else {
+                  await submitCalibrationToSheet(d);
+                }
+                handleSyncData(); 
+              } catch (err) {
+                console.error("Error al registrar calibración modal:", err);
+              }
+            }} 
+          />
+        </ErrorBoundary>
       )}
       {closingReport && (
         <ClosureForm 

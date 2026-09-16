@@ -4,7 +4,7 @@
     "geolocation"
   ],
   "name": "Remix: SEUIMIENTO INTERNO LOGISTICOS",
-  "description": "",
+  "description": "Sistema de gestión vehicular y seguimiento operativo de flota para la Gerencia de Barranquilla.",
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]
