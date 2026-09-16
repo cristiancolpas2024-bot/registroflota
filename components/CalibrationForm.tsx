@@ -1,52 +1,145 @@
-
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Calibration, Vehicle } from '../types';
 import { compressImage, createMosaic, processImageWithWatermark, normalizeStr, getWeekNumber } from '../utils';
-import { X, Key, Camera, CheckCircle, MapPin, Plus, Trash2, Loader2, Calendar, Settings2, Clock, ImageIcon, Building2, UserCircle, Disc, Save } from 'lucide-react';
+import { 
+  X, 
+  Camera, 
+  CheckCircle, 
+  Loader2, 
+  Calendar, 
+  Disc, 
+  Upload, 
+  Building2, 
+  UserCircle, 
+  Wrench, 
+  Clock, 
+  Trash2, 
+  Search, 
+  Sparkles,
+  ArrowRight,
+  Gauge
+} from 'lucide-react';
+
+interface TirePosition {
+  id: string;
+  code: string;
+  name: string;
+  initialKey: 'p1i' | 'p2i' | 'p3i' | 'p4i' | 'p5i' | 'p6i';
+  finalKey: 'p1f' | 'p2f' | 'p3f' | 'p4f' | 'p5f' | 'p6f';
+}
+
+const TIRE_POSITIONS: TirePosition[] = [
+  { id: '1', code: 'P1', name: 'Delantera Izquierda', initialKey: 'p1i', finalKey: 'p1f' },
+  { id: '2', code: 'P2', name: 'Delantera Derecha', initialKey: 'p2i', finalKey: 'p2f' },
+  { id: '3', code: 'P3', name: 'Trasera Ext. Izquierda', initialKey: 'p3i', finalKey: 'p3f' },
+  { id: '4', code: 'P4', name: 'Trasera Int. Izquierda', initialKey: 'p4i', finalKey: 'p4f' },
+  { id: '5', code: 'P5', name: 'Trasera Int. Derecha', initialKey: 'p5i', finalKey: 'p5f' },
+  { id: '6', code: 'P6', name: 'Trasera Ext. Derecha', initialKey: 'p6i', finalKey: 'p6f' },
+];
 
 interface CalibrationFormProps {
-  onClose: () => void;
+  onClose?: () => void;
   onSubmit: (calibration: any) => Promise<void>;
   vehicles: Vehicle[];
   preSelectedPlate?: string;
   calibrationToUpdate?: Calibration;
+  isInline?: boolean;
 }
 
-const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, vehicles, preSelectedPlate, calibrationToUpdate }) => {
+const COMMON_WORKSHOPS = [
+  'AUTOMUNDIAL',
+  'GARCILLANTAS',
+  'OMNIPOTENTE',
+  'LLANTERIA PATIÑO',
+  'VEHIPESA'
+];
+
+const CalibrationForm: React.FC<CalibrationFormProps> = ({ 
+  onClose, 
+  onSubmit, 
+  vehicles, 
+  preSelectedPlate, 
+  calibrationToUpdate,
+  isInline = false
+}) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [isProcessingPhotoLocal, setIsProcessingPhotoLocal] = useState(false);
-  const evidenceInputRef = useRef<HTMLInputElement>(null);
-  
-  const [filterCd, setFilterCd] = useState<string>('all');
-  const [filterContractor, setFilterContractor] = useState<string>('all');
-  const [plateSearch, setPlateSearch] = useState('');
-
-  const [capturedPhotos, setCapturedPhotos] = useState<string[]>([]);
-  const [formData, setFormData] = useState({
-    plate: calibrationToUpdate?.plate || preSelectedPlate || '',
-    taller: calibrationToUpdate?.equipment || '',
-    calibrationDate: calibrationToUpdate?.calibrationDate || new Date().toISOString().split('T')[0],
-    certificateUrl: '',
-  });
-
+  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isUpdateMode = !!calibrationToUpdate;
 
-  const cds = useMemo(() => Array.from(new Set(vehicles.map(v => v.cd || 'GENERAL'))).sort(), [vehicles]);
-  const contractors = useMemo(() => {
-    const filteredByCd = filterCd === 'all' 
-      ? vehicles 
-      : vehicles.filter(v => normalizeStr(v.cd || "") === normalizeStr(filterCd));
-    return Array.from(new Set(filteredByCd.map(v => v.contractor || 'GENERAL'))).sort();
-  }, [vehicles, filterCd]);
+  // Initial date & calculations
+  const todayStr = new Date().toISOString().split('T')[0];
+  const initialDate = calibrationToUpdate?.calibrationDate || todayStr;
+  const initialDateObj = new Date(initialDate + 'T12:00:00');
 
+  const [formData, setFormData] = useState({
+    plate: calibrationToUpdate?.plate || preSelectedPlate || '',
+    calibrationDate: initialDate,
+    month: initialDateObj.toLocaleString('es-ES', { month: 'long' }).toUpperCase(),
+    week: `SEMANA ${getWeekNumber(initialDateObj)}`,
+    taller: calibrationToUpdate?.equipment || 'AUTOMUNDIAL',
+    customTaller: '',
+    cd: '',
+    contractor: '',
+  });
+
+  const [filterCd, setFilterCd] = useState<string>('all');
+  const [plateSearch, setPlateSearch] = useState('');
+  const [capturedPhotos, setCapturedPhotos] = useState<string[]>([]);
+
+  // Presiones de llantas (P1 a P6: inicial y final en PSI)
+  const [presiones, setPresiones] = useState({
+    p1i: calibrationToUpdate?.p1i !== undefined ? String(calibrationToUpdate.p1i) : '',
+    p1f: calibrationToUpdate?.p1f !== undefined ? String(calibrationToUpdate.p1f) : '',
+    p2i: calibrationToUpdate?.p2i !== undefined ? String(calibrationToUpdate.p2i) : '',
+    p2f: calibrationToUpdate?.p2f !== undefined ? String(calibrationToUpdate.p2f) : '',
+    p3i: calibrationToUpdate?.p3i !== undefined ? String(calibrationToUpdate.p3i) : '',
+    p3f: calibrationToUpdate?.p3f !== undefined ? String(calibrationToUpdate.p3f) : '',
+    p4i: calibrationToUpdate?.p4i !== undefined ? String(calibrationToUpdate.p4i) : '',
+    p4f: calibrationToUpdate?.p4f !== undefined ? String(calibrationToUpdate.p4f) : '',
+    p5i: calibrationToUpdate?.p5i !== undefined ? String(calibrationToUpdate.p5i) : '',
+    p5f: calibrationToUpdate?.p5f !== undefined ? String(calibrationToUpdate.p5f) : '',
+    p6i: calibrationToUpdate?.p6i !== undefined ? String(calibrationToUpdate.p6i) : '',
+    p6f: calibrationToUpdate?.p6f !== undefined ? String(calibrationToUpdate.p6f) : '',
+  });
+
+  const handlePressureChange = (field: keyof typeof presiones, value: string) => {
+    setPresiones(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Autocomplete CD & Contractor when preSelectedPlate or initial plate is provided
+  useEffect(() => {
+    if (formData.plate) {
+      const v = vehicles.find(veh => veh.plate === formData.plate);
+      if (v) {
+        setFormData(prev => ({
+          ...prev,
+          cd: prev.cd || v.cd || 'GENERAL',
+          contractor: prev.contractor || v.contractor || 'GENERAL'
+        }));
+      }
+    }
+  }, [formData.plate, vehicles]);
+
+  // Unique CDs for quick filter
+  const uniqueCds = useMemo(() => {
+    const list = Array.from(new Set(vehicles.map(v => (v.cd || 'GENERAL').toUpperCase().trim()))).filter(Boolean);
+    return list.sort();
+  }, [vehicles]);
+
+  // Filtered vehicles for plate selection
   const filteredVehicles = useMemo(() => {
     let list = [...vehicles].filter(v => {
-      const matchCd = filterCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(filterCd);
-      const matchContractor = filterContractor === 'all' || normalizeStr(v.contractor || "") === normalizeStr(filterContractor);
-      return matchCd && matchContractor;
+      const vCd = (v.cd || 'GENERAL').toUpperCase().trim();
+      return filterCd === 'all' || normalizeStr(vCd) === normalizeStr(filterCd);
     });
 
     if (plateSearch) {
@@ -56,107 +149,95 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
 
     const sorted = list.sort((a, b) => a.plate.localeCompare(b.plate));
 
-    // Auto-select if only one result and not already selected
+    // Auto-select if only one result and user typed 3+ chars
     if (sorted.length === 1 && formData.plate !== sorted[0].plate && plateSearch.length >= 3) {
-      setFormData(prev => ({ ...prev, plate: sorted[0].plate }));
+      handlePlateSelect(sorted[0].plate);
     }
 
     return sorted;
-  }, [vehicles, filterCd, filterContractor, plateSearch, formData.plate]);
+  }, [vehicles, filterCd, plateSearch, formData.plate]);
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
+  const handlePlateSelect = (selectedPlate: string) => {
+    const v = vehicles.find(veh => veh.plate === selectedPlate);
+    setFormData(prev => ({
+      ...prev,
+      plate: selectedPlate,
+      cd: v?.cd || 'GENERAL',
+      contractor: v?.contractor || 'GENERAL'
+    }));
   };
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
+  const handleDateChange = (newDate: string) => {
+    if (!newDate) return;
+    const dateObj = new Date(newDate + 'T12:00:00');
+    const monthName = dateObj.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
+    const weekStr = `SEMANA ${getWeekNumber(dateObj)}`;
+    setFormData(prev => ({
+      ...prev,
+      calibrationDate: newDate,
+      month: monthName,
+      week: weekStr
+    }));
   };
 
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    
+  const getCoords = (): Promise<{ lat: number; lng: number } | undefined> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) return resolve(undefined);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => resolve(undefined),
+        { timeout: 4000 }
+      );
+    });
+  };
+
+  const processIncomingFiles = async (files: FileList | File[]) => {
     if (!formData.plate) {
-      alert("Seleccione la placa antes de añadir evidencia.");
+      alert("Por favor seleccione primero la placa del vehículo antes de capturar la evidencia.");
       return;
     }
 
-    const files = Array.from(e.dataTransfer.files) as File[];
-    if (files.length === 0) return;
-
-    setIsProcessingPhotoLocal(true);
-    
-    const getCoords = (): Promise<{lat: number, lng: number} | undefined> => {
-      return new Promise((resolve) => {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-          () => resolve(undefined),
-          { timeout: 5000 }
-        );
-      });
-    };
-
+    setIsProcessingPhoto(true);
     const coords = await getCoords();
 
-    for (const file of files) {
+    const fileArray = Array.from(files);
+    for (const file of fileArray) {
       if (capturedPhotos.length >= 4) break;
-      if (!file.type.startsWith('image/')) continue;
-      
-      const watermarked = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          const res = await processImageWithWatermark(reader.result as string, formData.plate, coords, formData.calibrationDate);
-          resolve(res);
-        };
-        reader.readAsDataURL(file);
-      });
+      if (!file.type.startsWith('image/') && !file.name.match(/\.(jpe?g|png|webp|heic|heif)$/i)) continue;
 
-      setCapturedPhotos(prev => [...prev, watermarked].slice(0, 4));
+      try {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        // Watermark with plate, date, coords, and compress
+        const watermarked = await processImageWithWatermark(base64, formData.plate, coords, formData.calibrationDate);
+        setCapturedPhotos(prev => [...prev, watermarked].slice(0, 4));
+      } catch (err) {
+        console.error("Error al procesar foto:", err);
+      }
     }
-    setIsProcessingPhotoLocal(false);
+
+    setIsProcessingPhoto(false);
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleAddPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0 || !formData.plate) {
-      if (!formData.plate) alert("Seleccione la placa antes de capturar la evidencia.");
-      return;
+  const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      processIncomingFiles(e.target.files);
     }
+  };
 
-    setIsProcessingPhotoLocal(true);
-    
-    const getCoords = (): Promise<{lat: number, lng: number} | undefined> => {
-      return new Promise((resolve) => {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-          () => resolve(undefined),
-          { timeout: 5000 }
-        );
-      });
-    };
-
-    const coords = await getCoords();
-
-    for (let i = 0; i < files.length; i++) {
-      if (capturedPhotos.length + i >= 4) break; 
-      const file = files[i];
-      
-      const watermarked = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          const res = await processImageWithWatermark(reader.result as string, formData.plate, coords, formData.calibrationDate);
-          resolve(res);
-        };
-        reader.readAsDataURL(file);
-      });
-
-      setCapturedPhotos(prev => [...prev, watermarked].slice(0, 4));
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processIncomingFiles(e.dataTransfer.files);
     }
-    
-    setIsProcessingPhotoLocal(false);
-    if (evidenceInputRef.current) evidenceInputRef.current.value = "";
   };
 
   const removePhoto = (index: number) => {
@@ -165,182 +246,445 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.plate || !formData.taller || capturedPhotos.length === 0) {
-      alert("Por favor complete todos los campos y capture evidencia.");
+
+    if (!formData.plate) {
+      alert("Por favor seleccione la placa del vehículo.");
       return;
     }
-    
+
+    const workshopName = formData.taller === 'OTRO' ? formData.customTaller.trim() : formData.taller;
+    if (!workshopName) {
+      alert("Por favor indique el nombre del taller.");
+      return;
+    }
+
+    if (capturedPhotos.length === 0) {
+      alert("Por favor tome o adjunte al menos una foto de evidencia/certificado.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      const mergedEvidence = await createMosaic(capturedPhotos, `CALIBRACIÓN: ${formData.plate} - ${formData.calibrationDate}`);
-      
-      const selectedVehicle = vehicles.find(v => v.plate === formData.plate);
+      // Create mosaic if multiple photos or compress single image
+      let finalEvidence = "";
+      if (capturedPhotos.length > 1) {
+        finalEvidence = await createMosaic(
+          capturedPhotos, 
+          `CALIBRACIÓN: ${formData.plate} - ${formData.calibrationDate}`
+        );
+      } else {
+        finalEvidence = await compressImage(capturedPhotos[0], 1600);
+      }
 
-      const calDate = new Date(formData.calibrationDate + 'T12:00:00');
-      const payload = { 
-        id: calibrationToUpdate?.id,
-        plate: formData.plate,
-        taller: formData.taller,
+      // Exact data payload expected by Apps Script POST_CALIBRATION
+      const payload = {
+        month: formData.month,
         calibrationDate: formData.calibrationDate,
-        originalPlate: calibrationToUpdate?.plate,
-        originalDate: calibrationToUpdate?.calibrationDate,
-        certificateUrl: mergedEvidence,
-        cd: selectedVehicle?.cd || 'GENERAL',
-        month: calDate.toLocaleString('es-ES', { month: 'long' }).toUpperCase(),
-        week: `SEMANA ${getWeekNumber(calDate)}`,
-        estado: 'COMPLETADO',
-        isUpdate: isUpdateMode
+        week: formData.week,
+        plate: formData.plate,
+        taller: workshopName,
+        certificateUrl: finalEvidence,
+        cd: formData.cd || 'GENERAL',
+        contractor: formData.contractor || 'GENERAL',
+        ...presiones
       };
+
       await onSubmit(payload);
+
       setIsSuccess(true);
-      setTimeout(onClose, 1500);
-    } catch (error) {
-      alert("Error al enviar. Verifique su conexión.");
+
+      // Reset form after short delay
+      setTimeout(() => {
+        setIsSuccess(false);
+        setCapturedPhotos([]);
+        setPlateSearch('');
+        setPresiones({
+          p1i: '', p1f: '', p2i: '', p2f: '', p3i: '', p3f: '',
+          p4i: '', p4f: '', p5i: '', p5f: '', p6i: '', p6f: ''
+        });
+        const freshToday = new Date().toISOString().split('T')[0];
+        const freshDateObj = new Date(freshToday + 'T12:00:00');
+        setFormData({
+          plate: '',
+          calibrationDate: freshToday,
+          month: freshDateObj.toLocaleString('es-ES', { month: 'long' }).toUpperCase(),
+          week: `SEMANA ${getWeekNumber(freshDateObj)}`,
+          taller: 'AUTOMUNDIAL',
+          customTaller: '',
+          cd: '',
+          contractor: '',
+        });
+        if (onClose && !isInline) {
+          onClose();
+        }
+      }, 1800);
+    } catch (err: any) {
+      console.error("Error al registrar calibración:", err);
+      alert("Ocurrió un error al guardar la calibración: " + (err?.message || "Verifique su conexión"));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (isSuccess) {
-    return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[70] p-4">
-        <div className="bg-white rounded-[3rem] p-12 flex flex-col items-center text-center max-w-sm border-4 border-indigo-50 shadow-2xl">
-          <CheckCircle size={64} className="text-emerald-500 mb-4 animate-bounce" />
-          <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tighter">¡REGISTRADA!</h2>
-          <p className="text-gray-500 font-bold text-[10px] uppercase tracking-widest mt-4">Sincronizando con Google Sheets...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center items-start sm:items-center z-[70] p-2 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] w-full max-w-xl my-4 sm:my-8 shadow-2xl border-[4px] sm:border-[6px] border-[#0f172a] overflow-hidden animate-in zoom-in duration-300">
-        <div className="bg-[#0f172a] p-5 sm:p-8 text-white flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-indigo-600 rounded-2xl shadow-lg">
-              <Disc size={24} />
-            </div>
-            <div>
-              <h2 className="text-xl font-black uppercase tracking-tighter">
-                {isUpdateMode ? 'VINCULAR EVIDENCIA' : '🛞 CALIBRACIÓN NEUMÁTICOS'}
-              </h2>
-              <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">
-                {isUpdateMode ? `ID: ${calibrationToUpdate.id}` : (preSelectedPlate ? `REPORTE DIRECTO: ${preSelectedPlate}` : 'Compresión de datos activa')}
-              </p>
-            </div>
+  const formContent = (
+    <div className={`bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-slate-200 overflow-hidden ${isInline ? 'w-full' : 'max-w-xl w-full'}`}>
+      {/* Header */}
+      <div className="bg-slate-900 p-4 sm:p-6 text-white flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 sm:p-3 bg-indigo-600 rounded-xl sm:rounded-2xl shadow-lg shadow-indigo-600/30">
+            <Disc size={22} className="text-white animate-spin-slow" />
           </div>
-          <button onClick={onClose} className="p-2.5 bg-white/10 hover:bg-red-500 rounded-xl transition-all"><X size={24} /></button>
+          <div>
+            <h2 className="text-lg sm:text-xl font-black uppercase tracking-tight">
+              Registrar Calibración
+            </h2>
+            <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider">
+              Control e ingreso de calibración de neumáticos
+            </p>
+          </div>
+        </div>
+        {onClose && !isInline && (
+          <button 
+            type="button" 
+            onClick={onClose} 
+            className="p-2 bg-white/10 hover:bg-red-500 rounded-xl transition-colors text-white"
+          >
+            <X size={20} />
+          </button>
+        )}
+      </div>
+
+      {/* Success Notification Banner */}
+      {isSuccess && (
+        <div className="p-4 sm:p-6 bg-emerald-50 border-b border-emerald-100 flex items-center gap-3 animate-in fade-in duration-300">
+          <CheckCircle size={28} className="text-emerald-600 shrink-0" />
+          <div>
+            <h3 className="text-sm font-black text-emerald-900 uppercase">¡Calibración Registrada con Éxito!</h3>
+            <p className="text-xs text-emerald-700 font-medium">El registro y evidencia han sido guardados en el sistema.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Form Fields */}
+      <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+        
+        {/* 1. FECHA DE CALIBRACIÓN */}
+        <div className="space-y-1.5">
+          <label className="text-[10px] sm:text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+            <Calendar size={14} className="text-indigo-600" /> Fecha de Calibración
+          </label>
+          <input 
+            type="date"
+            required
+            value={formData.calibrationDate}
+            onChange={(e) => handleDateChange(e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:bg-white focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/20 outline-none transition-all"
+          />
+          <div className="flex items-center justify-between px-1 text-[9px] font-black uppercase text-slate-400">
+            <span>Mes: <strong className="text-indigo-600">{formData.month}</strong></span>
+            <span>Semana: <strong className="text-indigo-600">{formData.week}</strong></span>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 sm:p-8 space-y-4 sm:space-y-6 bg-white">
-          {!preSelectedPlate && !isUpdateMode && (
-            <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200 grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">C.D.</label>
-                <select className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-[10px] font-black uppercase" value={filterCd} onChange={(e) => { setFilterCd(e.target.value); setFilterContractor('all'); setFormData({...formData, plate: ''}); }}>
+        {/* 2. PLACA DEL VEHÍCULO */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] sm:text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Disc size={14} className="text-indigo-600" /> Placa Vehicular
+            </label>
+            {uniqueCds.length > 1 && (
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] font-bold text-slate-400">CD:</span>
+                <select 
+                  value={filterCd} 
+                  onChange={(e) => {
+                    setFilterCd(e.target.value);
+                    setFormData(prev => ({ ...prev, plate: '' }));
+                  }}
+                  className="text-[9px] font-black uppercase bg-slate-100 rounded px-1.5 py-0.5 text-slate-700 outline-none"
+                >
                   <option value="all">TODOS</option>
-                  {cds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
+                  {uniqueCds.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">CONTRATISTA</label>
-                <select className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-[10px] font-black uppercase" value={filterContractor} onChange={(e) => { setFilterContractor(e.target.value); setFormData({...formData, plate: ''}); }}>
-                  <option value="all">TODOS</option>
-                  {contractors.map(cnt => <option key={cnt} value={cnt}>{cnt}</option>)}
-                </select>
+            )}
+          </div>
+
+          {/* Quick search input */}
+          <div className="relative">
+            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input 
+              type="text"
+              placeholder="BUSCAR O FILTRAR PLACA..."
+              value={plateSearch}
+              onChange={(e) => setPlateSearch(e.target.value.toUpperCase())}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-xs font-black uppercase text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-indigo-600 outline-none mb-1.5"
+            />
+          </div>
+
+          <select
+            required
+            value={formData.plate}
+            onChange={(e) => handlePlateSelect(e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-black text-slate-900 focus:bg-white focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/20 outline-none transition-all uppercase"
+          >
+            <option value="">-- SELECCIONE LA PLACA --</option>
+            {filteredVehicles.map(v => (
+              <option key={v.id || v.plate} value={v.plate}>
+                {v.plate} {v.cd ? `• ${v.cd}` : ''} {v.contractor ? `(${v.contractor})` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* 3. CD Y CONTRATISTA (Autocompletados o editables) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <label className="text-[10px] sm:text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Building2 size={13} className="text-indigo-600" /> Centro (C.D.)
+            </label>
+            <input 
+              type="text"
+              placeholder="Ej: BARRANQUILLA"
+              value={formData.cd}
+              onChange={(e) => setFormData(prev => ({ ...prev, cd: e.target.value.toUpperCase() }))}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs sm:text-sm font-bold uppercase text-slate-900 focus:bg-white focus:border-indigo-600 outline-none"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] sm:text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <UserCircle size={13} className="text-indigo-600" /> Contratista / Operador
+            </label>
+            <input 
+              type="text"
+              placeholder="Ej: LOGÍSTICA"
+              value={formData.contractor}
+              onChange={(e) => setFormData(prev => ({ ...prev, contractor: e.target.value.toUpperCase() }))}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs sm:text-sm font-bold uppercase text-slate-900 focus:bg-white focus:border-indigo-600 outline-none"
+            />
+          </div>
+        </div>
+
+        {/* 4. TALLER / EQUIPO */}
+        <div className="space-y-1.5">
+          <label className="text-[10px] sm:text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+            <Wrench size={14} className="text-indigo-600" /> Taller / Proveedor
+          </label>
+          <select 
+            value={formData.taller}
+            onChange={(e) => setFormData(prev => ({ ...prev, taller: e.target.value }))}
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-black uppercase text-slate-900 focus:bg-white focus:border-indigo-600 outline-none"
+          >
+            {COMMON_WORKSHOPS.map(w => (
+              <option key={w} value={w}>{w}</option>
+            ))}
+            <option value="OTRO">OTRO TALLER (ESPECIFICAR)</option>
+          </select>
+
+          {formData.taller === 'OTRO' && (
+            <input 
+              type="text"
+              required
+              placeholder="NOMBRE DEL TALLER..."
+              value={formData.customTaller}
+              onChange={(e) => setFormData(prev => ({ ...prev, customTaller: e.target.value.toUpperCase() }))}
+              className="w-full bg-white border-2 border-indigo-500 rounded-xl px-4 py-3 text-sm font-black uppercase text-slate-900 outline-none mt-2"
+            />
+          )}
+        </div>
+
+        {/* 5. PRESIÓN DE LLANTAS (P1 A P6) */}
+        <div className="space-y-2.5 pt-1">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] sm:text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Gauge size={14} className="text-indigo-600" /> Presión de Llantas (PSI)
+            </label>
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">
+              6 POSICIONES (P1 - P6)
+            </span>
+          </div>
+
+          <div className="bg-slate-50 p-2.5 sm:p-3.5 rounded-2xl border border-slate-200 space-y-2">
+            {TIRE_POSITIONS.map((pos) => (
+              <div 
+                key={pos.id}
+                className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+              >
+                <div className="flex items-center gap-2 sm:w-44 shrink-0">
+                  <span className="w-8 h-8 rounded-lg bg-indigo-600 text-white font-black text-xs flex items-center justify-center shadow-xs">
+                    {pos.code}
+                  </span>
+                  <div>
+                    <p className="text-xs font-black text-slate-800 uppercase tracking-tight">{pos.code}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">{pos.name}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 flex-1">
+                  <div>
+                    <label className="text-[8px] font-black text-slate-500 uppercase tracking-wider block mb-1">
+                      Inicial (PSI)
+                    </label>
+                    <input 
+                      type="number"
+                      step="any"
+                      inputMode="decimal"
+                      placeholder="Ej: 32.5"
+                      value={presiones[pos.initialKey]}
+                      onChange={(e) => handlePressureChange(pos.initialKey, e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-xs sm:text-sm font-black text-slate-900 focus:bg-white focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 outline-none transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[8px] font-black text-slate-500 uppercase tracking-wider block mb-1">
+                      Final (PSI)
+                    </label>
+                    <input 
+                      type="number"
+                      step="any"
+                      inputMode="decimal"
+                      placeholder="Ej: 35.0"
+                      value={presiones[pos.finalKey]}
+                      onChange={(e) => handlePressureChange(pos.finalKey, e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-xs sm:text-sm font-black text-slate-900 focus:bg-white focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 outline-none transition-all"
+                    />
+                  </div>
+                </div>
               </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 6. EVIDENCIA / CERTIFICADO */}
+        <div className="space-y-2 pt-1">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] sm:text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Camera size={14} className="text-indigo-600" /> Evidencia / Certificado de Calibración
+            </label>
+            <span className="text-[10px] font-black text-slate-400 uppercase">
+              {capturedPhotos.length} / 4 FOTOS
+            </span>
+          </div>
+
+          {/* Action buttons: Camera & Gallery */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={isProcessingPhoto || capturedPhotos.length >= 4}
+              onClick={() => cameraInputRef.current?.click()}
+              className="flex items-center justify-center gap-2 py-3 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50"
+            >
+              <Camera size={16} /> Tomar Foto
+            </button>
+            <button
+              type="button"
+              disabled={isProcessingPhoto || capturedPhotos.length >= 4}
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center justify-center gap-2 py-3 px-3 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50"
+            >
+              <Upload size={16} /> Subir Archivo
+            </button>
+          </div>
+
+          {/* Hidden inputs */}
+          <input 
+            type="file"
+            ref={cameraInputRef}
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handlePhotoCapture}
+          />
+          <input 
+            type="file"
+            ref={fileInputRef}
+            accept="image/*,image/heic,image/heif,image/jpeg,image/png,image/webp"
+            multiple
+            className="hidden"
+            onChange={handlePhotoCapture}
+          />
+
+          {/* Drag & Drop or Empty State Area */}
+          {capturedPhotos.length === 0 && (
+            <div 
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+              onDrop={handleDrop}
+              onClick={() => cameraInputRef.current?.click()}
+              className={`p-6 border-2 border-dashed rounded-2xl text-center cursor-pointer transition-all ${
+                isDragging ? 'border-indigo-500 bg-indigo-50/50' : 'border-slate-200 hover:border-indigo-400 bg-slate-50/60'
+              }`}
+            >
+              {isProcessingPhoto ? (
+                <div className="flex flex-col items-center gap-2 text-indigo-600">
+                  <Loader2 size={24} className="animate-spin" />
+                  <span className="text-xs font-black uppercase">Procesando y optimizando imagen...</span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-1.5 text-slate-400">
+                  <Camera size={28} className="text-slate-300" />
+                  <p className="text-xs font-black uppercase text-slate-600">Toque para tomar foto o adjuntar evidencia</p>
+                  <p className="text-[10px] text-slate-400">Soporta fotos de cámara o certificados escaneados</p>
+                </div>
+              )}
             </div>
           )}
 
-          <div className="space-y-2">
-            <div className="flex justify-between items-end px-1">
-              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">Placa Vehicular</label>
-              {!preSelectedPlate && !isUpdateMode && (
-                <input 
-                  type="text" 
-                  placeholder="BUSCAR..." 
-                  className="bg-slate-100 border-none rounded-lg px-2 py-0.5 text-[9px] font-black uppercase outline-none focus:ring-2 ring-indigo-500/30 w-24 transition-all"
-                  value={plateSearch}
-                  onChange={(e) => setPlateSearch(e.target.value)}
-                />
-              )}
-            </div>
-            <select 
-              required 
-              className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none disabled:bg-slate-100 disabled:text-slate-400" 
-              value={formData.plate} 
-              onChange={e => setFormData({ ...formData, plate: e.target.value })}
-              disabled={!!preSelectedPlate || isUpdateMode}
-            >
-              <option value="">-- {filteredVehicles.length === 0 ? 'SIN RESULTADOS' : 'SELECCIONE'} --</option>
-              {preSelectedPlate || isUpdateMode ? (
-                <option value={formData.plate}>{formData.plate}</option>
-              ) : (
-                filteredVehicles.map(v => <option key={v.id} value={v.plate}>{v.plate}</option>)
-              )}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Taller / Equipo</label>
-              <select 
-                required 
-                className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none disabled:opacity-50 uppercase" 
-                value={formData.taller} 
-                onChange={e => setFormData({ ...formData, taller: e.target.value })}
-              >
-                <option value="">-- SELECCIONE --</option>
-                <option value="AUTOMUNDIAL">AUTOMUNDIAL</option>
-                <option value="GARCILLANTAS">GARCILLANTAS</option>
-                <option value="OMNIPOTENTE">OMNIPOTENTE</option>
-                <option value="LLANTERIA PATIÑO">LLANTERIA PATIÑO</option>
-                {formData.taller && !["AUTOMUNDIAL", "GARCILLANTAS", "OMNIPOTENTE", "LLANTERIA PATIÑO"].includes(formData.taller) && (
-                  <option value={formData.taller}>{formData.taller}</option>
-                )}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Fecha</label>
-              <input required type="date" className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none disabled:opacity-50" value={formData.calibrationDate} onChange={e => setFormData({ ...formData, calibrationDate: e.target.value })} />
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <label className="text-[11px] font-black text-indigo-600 uppercase tracking-widest">Evidencia (Max 4 fotos)</label>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{capturedPhotos.length} / 4</span>
-            </div>
-            
-            <div 
-              className={`grid grid-cols-2 gap-3 transition-all duration-300 ${isDragging ? 'scale-105 border-indigo-500 bg-indigo-50/50' : ''}`}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            >
-              {capturedPhotos.map((photo, index) => (
-                <div key={index} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 shadow-sm">
-                  <img src={photo} className="w-full h-full object-cover" />
-                  <button type="button" onClick={() => removePhoto(index)} className="absolute top-1 right-1 p-1 bg-rose-500 text-white rounded-lg"><Trash2 size={12} /></button>
+          {/* Photo Previews */}
+          {capturedPhotos.length > 0 && (
+            <div className="grid grid-cols-2 gap-2.5 pt-1">
+              {capturedPhotos.map((photo, idx) => (
+                <div key={idx} className="relative aspect-video rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-xs group">
+                  <img src={photo} alt={`Evidencia ${idx + 1}`} className="w-full h-full object-cover" />
+                  <button 
+                    type="button"
+                    onClick={() => removePhoto(idx)}
+                    className="absolute top-1.5 right-1.5 p-1.5 bg-rose-600 text-white rounded-lg shadow hover:bg-rose-700 transition-colors"
+                    title="Eliminar foto"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                  <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase">
+                    Foto {idx + 1}
+                  </span>
                 </div>
               ))}
-              {capturedPhotos.length < 4 && (
-                <button type="button" disabled={!formData.plate || isProcessingPhotoLocal} onClick={() => evidenceInputRef.current?.click()} className="aspect-square rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center gap-1 text-slate-400 hover:border-indigo-400 hover:text-indigo-600 transition-all">
-                  <Camera size={24} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Añadir Fotos</span>
-                </button>
-              )}
             </div>
-            <input type="file" accept="image/*,image/heic,image/heif,image/jpeg,image/png,image/webp" multiple ref={evidenceInputRef} className="hidden" onChange={handleAddPhoto} />
-          </div>
+          )}
+        </div>
 
-          <button type="submit" disabled={isSubmitting || isProcessingPhotoLocal || capturedPhotos.length === 0} className={`w-full py-6 text-white font-black rounded-[2rem] text-sm uppercase shadow-2xl transition-all flex items-center justify-center gap-4 ${isUpdateMode ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-[#0f172a] hover:bg-indigo-600'}`}>
-            {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : (isUpdateMode ? <Save size={24} /> : <CheckCircle size={24} />)}
-            {isSubmitting ? 'ENVIANDO...' : (isUpdateMode ? 'ACTUALIZAR EVIDENCIA' : 'CONFIRMAR REGISTRO')}
-          </button>
-        </form>
-      </div>
+        {/* 6. BOTÓN REGISTRAR CALIBRACIÓN A ANCHO COMPLETO */}
+        <button 
+          type="submit"
+          disabled={isSubmitting || isProcessingPhoto || capturedPhotos.length === 0}
+          className="w-full py-4 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm uppercase tracking-wider rounded-xl sm:rounded-2xl shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2.5 transition-all active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 size={18} className="animate-spin" />
+              <span>Guardando Calibración...</span>
+            </>
+          ) : (
+            <>
+              <CheckCircle size={18} />
+              <span>Registrar Calibración</span>
+            </>
+          )}
+        </button>
+
+      </form>
+    </div>
+  );
+
+  if (isInline) {
+    return formContent;
+  }
+
+  // Modal mode
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex justify-center items-start sm:items-center z-[70] p-2 sm:p-4 overflow-y-auto">
+      {formContent}
     </div>
   );
 };

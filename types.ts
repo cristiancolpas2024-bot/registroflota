@@ -41,6 +41,18 @@ export interface Calibration {
   week?: string;
   estado?: string;
   year?: number;
+  p1i?: string | number;
+  p1f?: string | number;
+  p2i?: string | number;
+  p2f?: string | number;
+  p3i?: string | number;
+  p3f?: string | number;
+  p4i?: string | number;
+  p4f?: string | number;
+  p5i?: string | number;
+  p5f?: string | number;
+  p6i?: string | number;
+  p6f?: string | number;
 }
 
 export interface Fine {

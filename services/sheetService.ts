@@ -9,6 +9,8 @@ const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfy
 const GOOGLE_SCRIPT_AUDIT_URL = 'https://script.google.com/macros/s/AKfycbxSrmZSoQp1l98M3Hcfktl31gel3ynU2eVT2d1_IOg0UKCRVJQVCTKwSmMjZ54EORB1-w/exec';
 export const OPERATIONAL_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxztSeQFSRD3Ae794Aiqs-MvXsYB5Ylfcu4ny4EJtpZqV0rB7lJBrfjnL7gfD2uWGnW/exec';
 export const SPARE_PARTS_SCRIPT_URL = OPERATIONAL_SCRIPT_URL;
+export const CALIBRATIONS_SCRIPT_URL = OPERATIONAL_SCRIPT_URL;
+export const getCalibrationsDocId = (): string => '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
@@ -463,7 +465,19 @@ const processCalibrationRows = (rows: any[][], vehicles: Vehicle[] = []): Calibr
       estado,
       year,
       cd: cd,
-      contractor: contractor
+      contractor: contractor,
+      p1i: cleanSheetValue(row[9]),
+      p1f: cleanSheetValue(row[10]),
+      p2i: cleanSheetValue(row[11]),
+      p2f: cleanSheetValue(row[12]),
+      p3i: cleanSheetValue(row[13]),
+      p3f: cleanSheetValue(row[14]),
+      p4i: cleanSheetValue(row[15]),
+      p4f: cleanSheetValue(row[16]),
+      p5i: cleanSheetValue(row[17]),
+      p5f: cleanSheetValue(row[18]),
+      p6i: cleanSheetValue(row[19]),
+      p6f: cleanSheetValue(row[20])
     };
   });
 };
@@ -1593,7 +1607,24 @@ export const submitMileageToSheet = async (mileageData: any): Promise<void> => {
   const success = await sendToGAS({ method: 'POST_MILEAGE', data: mileageData }); 
   if (!success) throw new Error("Error al guardar en el servidor");
 };
-export const submitCalibrationToSheet = async (calibrationDate: any): Promise<void> => { await sendToGAS({ method: 'POST_CALIBRATION', data: calibrationDate }); };
+export const submitCalibrationToSheet = async (calibrationData: any): Promise<void> => {
+  const docId = getCalibrationsDocId();
+  try {
+    const result = await sendToGAS(
+      { method: 'POST_CALIBRATION', data: { ...calibrationData, docId } },
+      CALIBRATIONS_SCRIPT_URL, true
+    );
+    if (result && typeof result === 'object' && (result as any).status === 'success') return;
+    if (result === true) return;
+  } catch (err) {
+    console.warn("Calibración CORS falló, fallback no-cors:", err);
+  }
+  const success = await sendToGAS(
+    { method: 'POST_CALIBRATION', data: { ...calibrationData, docId } },
+    CALIBRATIONS_SCRIPT_URL, false
+  );
+  if (!success) throw new Error("Error al guardar la calibración");
+};
 export const submitCalibrationUpdateToSheet = async (data: any): Promise<void> => { await sendToGAS({ method: 'POST_CALIBRATION_UPDATE', data }); };
 export const submitWashToSheet = async (washData: any): Promise<void> => { await sendToGAS({ method: 'POST_WASH', data: washData }); };
 export const submitCleaningToSheet = async (cleaningData: any): Promise<void> => { await sendToGAS({ method: 'POST_CLEANING', data: cleaningData }); };

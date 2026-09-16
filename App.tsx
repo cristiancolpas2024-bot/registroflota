@@ -869,6 +869,7 @@ const App: React.FC = () => {
                          { id: 'limpieza', label: 'Limpieza 5S', icon: <Sparkles size={18}/> },
                          { id: 'visitas', label: 'Visitas a Taller', icon: <Store size={18}/> },
                          { id: 'lavados', label: 'Lavados', icon: <Droplets size={18}/> },
+                         { id: 'calibraciones', label: 'Calibración', icon: <Disc size={18}/> },
                        ].map(item => (
                          <button 
                            key={item.id}
@@ -1443,149 +1444,15 @@ const App: React.FC = () => {
           )}
 
           {activeView === 'calibraciones' && (
-            <div className="max-w-7xl mx-auto space-y-8 pb-20">
-               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div className="space-y-1">
-                    <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-4">
-                      <Disc size={40} className="text-indigo-600" /> Cumplimiento Calibración
-                    </h2>
-                    <p className="text-[11px] text-slate-400 font-black uppercase tracking-[0.3em] ml-14">Monitoreo de presión y desgaste</p>
-                  </div>
-                  
-                  <div className="flex flex-wrap items-center gap-4">
-                      <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100 flex items-center">
-                        <button 
-                          onClick={() => setCalibrationViewMode('calendar')}
-                          className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${calibrationViewMode === 'calendar' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
-                        >
-                          Cronograma
-                        </button>
-                        <button 
-                          onClick={() => setCalibrationViewMode('list')}
-                          className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${calibrationViewMode === 'list' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
-                        >
-                          Lista
-                        </button>
-                        <button 
-                          onClick={() => setCalibrationViewMode('visual')}
-                          className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${calibrationViewMode === 'visual' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
-                        >
-                          Visual
-                        </button>
-                      </div>
-
-                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4">
-                      <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-                        <CalendarDays size={16} className="text-indigo-600" />
-                        <div className="flex flex-col">
-                          <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">PERIODO</span>
-                          <div className="flex items-center gap-2">
-                            <select 
-                              className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer"
-                              value="MES"
-                              disabled
-                            >
-                              <option value="MES">MES</option>
-                            </select>
-                            <span className="text-slate-300">|</span>
-                            <select 
-                              className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer"
-                              value={selectedMonth}
-                              onChange={e => setSelectedMonth(e.target.value)}
-                            >
-                              <option value="TODOS">TODOS</option>
-                              {['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'].map(m => (
-                                <option key={m} value={m}>{m}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-               </div>
-
-               {/* Filtros CD y Contratista */}
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                      <Building2 size={14} className="text-indigo-400" /> Filtrar por CD
-                    </p>
-                    <select 
-                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-[11px] font-black uppercase outline-none focus:border-indigo-500 appearance-none cursor-pointer"
-                      value={filterCd}
-                      onChange={e => setFilterCd(e.target.value)}
-                    >
-                      <option value="all">TODOS LOS CENTROS</option>
-                      {uniqueCds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
-                    </select>
-                  </div>
-                  <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                      <UserCircle size={14} className="text-indigo-400" /> Filtrar por Contratista
-                    </p>
-                    <select 
-                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-[11px] font-black uppercase outline-none focus:border-indigo-500 appearance-none cursor-pointer"
-                      value={filterContractor}
-                      onChange={e => setFilterContractor(e.target.value)}
-                    >
-                      <option value="all">TODOS LOS OPERADORES</option>
-                      {uniqueContractors.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-               </div>
-
-               <CalibrationStats 
-                 total={statsCalibrations.total}
-                 completed={statsCalibrations.completed}
-                 pending={statsCalibrations.pending}
-                 searchCount={statsCalibrations.searchCount}
-                 month={selectedMonth}
-               />
-
-               {calibrationViewMode === 'visual' ? (
-                 <CalibrationVisuals 
-                   calibrations={calibrations}
-                   selectedYear={selectedYear}
-                   selectedMonth={selectedMonth}
-                   selectedCd={filterCd}
-                   selectedContractor={filterContractor}
-                 />
-               ) : calibrationViewMode === 'list' ? (
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {filteredCalibrations.map(c => (
-                      <CalibrationCard 
-                        key={c.id} 
-                        calibration={c} 
-                        onViewDoc={(url, t) => setViewDoc({url, title: t})} 
-                        onUpdateEvidence={(cal) => {
-                          setUpdatingCalibration(cal);
-                          setShowCalibrationForm(true);
-                        }}
-                      />
-                    ))}
-                    {filteredCalibrations.length === 0 && (
-                      <div className="col-span-full bg-white rounded-[3rem] p-20 text-center border-2 border-dashed border-slate-200">
-                        <Disc size={48} className="mx-auto text-slate-200 mb-4" />
-                        <p className="text-slate-400 font-black uppercase tracking-widest text-sm">No se han encontrado calibraciones con los filtros seleccionados</p>
-                      </div>
-                    )}
-                 </div>
-               ) : (
-                 <CalibrationCalendar 
-                   calibrations={filteredCalibrations}
-                   selectedMonth={selectedMonth}
-                   selectedYear={selectedYear}
-                   onMonthChange={setSelectedMonth}
-                   onYearChange={setSelectedYear}
-                   onViewDoc={(url, t) => setViewDoc({url, title: t})}
-                   onUpdateEvidence={(cal) => {
-                     setUpdatingCalibration(cal);
-                     setShowCalibrationForm(true);
-                   }}
-                   searchTerm={searchTerm}
-                 />
-               )}
+            <div className="max-w-xl mx-auto py-2 sm:py-6 pb-32 px-2 sm:px-4">
+              <CalibrationForm 
+                isInline={true}
+                vehicles={vehicles} 
+                onSubmit={async (d) => { 
+                  await submitCalibrationToSheet(d); 
+                  handleSyncData(); 
+                }} 
+              />
             </div>
           )}
 
@@ -1790,7 +1657,7 @@ const App: React.FC = () => {
       {showWashForm && activeView !== 'lavados' && <WashForm vehicles={vehicles} onClose={() => setShowWashForm(false)} onSubmit={async (d) => { await submitWashToSheet(d); handleSyncData(); }} />}
       {showCleaningForm && <CleaningForm vehicles={vehicles} onClose={() => setShowCleaningForm(false)} onSubmit={async (d) => { await submitCleaningToSheet(d); handleSyncData(); }} />}
       {closingCleaning && <CleaningForm vehicles={vehicles} preSelectedPlate={closingCleaning.plate} initialDate={closingCleaning.date} onClose={() => setClosingCleaning(null)} onSubmit={async (d) => { await submitCleaningToSheet(d); handleSyncData(); }} />}
-      {showCalibrationForm && (
+      {showCalibrationForm && activeView !== 'calibraciones' && (
         <CalibrationForm 
           vehicles={vehicles} 
           calibrationToUpdate={updatingCalibration || undefined}
