@@ -504,21 +504,24 @@ export interface NoveltyReportPayload {
 }
 
 export interface VehicleInventoryPayload {
-  fecha: string;
+  fecha: string; // Formato dd/mm/yyyy
   plate: string;
-  inspector: string;
+  nombre: 'Edwion Correa' | 'Leonardo Rodriguez' | 'David Reales' | string;
   fotoFrontal: string;
   fotoLateralIzq: string;
   fotoLateralDer: string;
   fotoTrasera: string;
-  carretillas: number;
+  carretilla: number;
   conos: number;
-  novedad?: string;
-  fotoNovedad1?: string;
-  fotoNovedad2?: string;
-  fotoNovedad3?: string;
-  fotoNovedad4?: string;
+  estriboIzq: string;
+  estriboDer: string;
+  novedad1?: string;
+  novedad2?: string;
+  novedad3?: string;
   observacion?: string;
+  // Aliases de compatibilidad
+  inspector?: string;
+  carretillas?: number;
 }
 
 

@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, SparePartRecord, SparePartInspectionPayload, NoveltyReport, NoveltyReportPayload } from '../types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, SparePartRecord, SparePartInspectionPayload, NoveltyReport, NoveltyReportPayload, VehicleInventoryPayload } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec'; 
@@ -2457,7 +2457,7 @@ export const fetchNoveltyReportsFromSheet = async (): Promise<NoveltyReport[]> =
   return [];
 };
 
-export const submitVehicleInventory = async (data: any): Promise<boolean> => {
+export const submitVehicleInventory = async (data: VehicleInventoryPayload | any): Promise<boolean> => {
   const payload = {
     method: 'POST_INVENTARIO',
     data: { ...data, docId: '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU', sheetName: 'INVENTARIO DIARIO' }
@@ -2465,11 +2465,22 @@ export const submitVehicleInventory = async (data: any): Promise<boolean> => {
   try {
     const result = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, true);
     if (result && typeof result === 'object' && (result as any).status === 'success') return true;
+    if (result && typeof result === 'object' && (result as any).status === 'error') {
+      console.error('Error Apps Script al guardar inventario:', (result as any).message);
+      return false;
+    }
     if (result === true) return true;
-    return true; // llegó pero sin confirmación legible: NO reintentar (evita duplicado)
+    return false;
   } catch (e) {
-    console.warn('Inventario error de red, fallback único:', e);
-    const ok = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, false);
-    return !!ok;
+    console.warn('Inventario error de red, intentando fallback directo:', e);
+    try {
+      const ok = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, false);
+      if (ok && typeof ok === 'object' && (ok as any).status === 'success') return true;
+      if (ok === true) return true;
+      return false;
+    } catch (err) {
+      console.error('Error al guardar inventario (fallback fallido):', err);
+      return false;
+    }
   }
 };

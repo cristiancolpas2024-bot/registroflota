@@ -97,7 +97,7 @@ import {
 import { normalizePlate, normalizeStr, getWeekNumber } from './utils';
 import { 
   RefreshCw, Users, Truck, Search, Shield, ShieldCheck, Gavel, Menu, LogOut, Loader2, 
-  Building2, ListFilter, CalendarDays, ClipboardList, Sparkles, Droplets, 
+  Building2, ListFilter, CalendarDays, ClipboardList, Brush, Droplets, 
   Disc, Store, Gauge, Plus, History, Filter, Hash, Calendar, Clock, MapPin,
   UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronDown, ChevronUp, Wrench, Lock, X, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap, Package, Home
 } from 'lucide-react';
@@ -134,7 +134,7 @@ export const GESTION_MODULES: GestionModuleItem[] = [
   { 
     id: 'limpieza', 
     label: 'Limpieza 5S', 
-    icon: Sparkles, 
+    icon: Brush, 
     description: 'Auditoría y control de orden y limpieza 5S en cabinas' 
   },
   { 
@@ -1014,13 +1014,10 @@ const App: React.FC = () => {
               <button 
                 key={item.id}
                 onClick={() => setActiveView(item.id as ActiveView)}
-                className={`flex-1 flex flex-col items-center justify-center p-1.5 rounded-2xl transition-all duration-300 relative ${isActive ? 'text-[#0F9D6E] scale-105' : 'text-slate-400 hover:text-slate-200'}`}
+                className={`flex-1 flex flex-col items-center justify-center p-1.5 rounded-xl transition-colors ${isActive ? 'text-[#0F9D6E]' : 'text-slate-400 hover:text-slate-200'}`}
               >
-                {isActive && (
-                  <span className="absolute -top-1 w-1.5 h-1.5 bg-[#0F9D6E] rounded-full animate-pulse shadow-md shadow-[#0F9D6E]" />
-                )}
                 {item.icon}
-                <span className={`text-[8px] font-black uppercase tracking-widest mt-1 text-center truncate ${isActive ? 'text-white' : 'text-slate-500'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-wider mt-1 text-center truncate ${isActive ? 'text-white' : 'text-slate-400'}`}>
                   {item.label}
                 </span>
               </button>
@@ -1491,25 +1488,25 @@ const App: React.FC = () => {
           )}
 
           {activeView === 'limpieza' && (
-            <div className="max-w-4xl mx-auto space-y-8 pb-20 pt-10 px-4">
-              <div className="bg-white p-12 rounded-[3.5rem] border border-slate-200 shadow-2xl text-center flex flex-col items-center justify-center space-y-8">
-                <div className="p-8 bg-cyan-50 text-cyan-600 rounded-[2.5rem] shadow-inner">
-                  <Sparkles size={64} className="animate-pulse" />
+            <div className="max-w-xl mx-auto py-6 pb-32 px-4">
+              <div className="bg-white p-8 sm:p-10 rounded-2xl border border-slate-200 shadow-sm text-center flex flex-col items-center justify-center space-y-6">
+                <div className="w-16 h-16 bg-slate-100 text-slate-700 rounded-2xl flex items-center justify-center">
+                  <ClipboardCheck size={32} />
                 </div>
-                <div className="space-y-3 max-w-lg">
-                  <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter">
+                <div className="space-y-2 max-w-md">
+                  <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">
                     Limpieza 5S
                   </h2>
-                  <p className="text-[12px] text-slate-400 font-extrabold uppercase tracking-widest leading-relaxed">
-                    Módulo de registro rápido de limpiezas profundas y cumplimiento de higiene.
+                  <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                    Control y registro rápido de limpieza profunda y cumplimiento de estándares de higiene en vehículos.
                   </p>
                 </div>
 
                 <button 
                   onClick={() => setShowCleaningForm(true)}
-                  className="flex items-center gap-4 px-10 py-5 bg-cyan-600 text-white rounded-[2rem] text-[13px] font-black uppercase tracking-widest shadow-2xl shadow-cyan-600/30 hover:bg-cyan-700 hover:scale-[1.02] active:scale-[0.98] transition-all animate-bounce"
+                  className="flex items-center gap-3 px-6 py-3.5 bg-slate-900 text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-slate-800 transition-colors cursor-pointer"
                 >
-                  <Plus size={24}/> Registrar Limpieza
+                  <Plus size={18}/> Registrar Limpieza
                 </button>
               </div>
             </div>

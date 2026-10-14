@@ -683,6 +683,84 @@ function doPost(e) {
         if (lock.hasLock()) lock.releaseLock();
         return output("success", url);
       }
+      else if (m === 'POST_INVENTARIO' || m === 'POST_INVENTARIO_DIARIO') {
+        var docId = d.docId || ID_HOJA;
+        var ss = SpreadsheetApp.openById(docId);
+        var sheetName = d.sheetName || "INVENTARIO DIARIO";
+        var s = ss.getSheetByName(sheetName) || getSheetByGid(ss, "849297780") || getS(ss, sheetName);
+        if (!s) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "No se encontró la pestaña '" + sheetName + "' en el documento.");
+        }
+
+        // Si la hoja está vacía, crear los 15 encabezados exactos (índices 0 a 14)
+        if (s.getLastRow() === 0) {
+          s.appendRow([
+            "FECHA",
+            "PLACA",
+            "NOMBRE",
+            "Foto Frontal",
+            "Foto Lateral Izq.",
+            "Foto Lateral Der.",
+            "Foto Trasera",
+            "carretilla",
+            "conos",
+            "estribo Izq.",
+            "estribo Der.",
+            "novedad1",
+            "novedad2",
+            "novedad3",
+            "observacion"
+          ]);
+        }
+
+        var placa = (d.plate || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
+        var fecha = d.fecha || Utilities.formatDate(new Date(), "GMT-5", "dd/MM/yyyy");
+        var nombre = d.nombre || d.inspector || "";
+
+        // Subir fotos fijas obligatorias a Drive
+        var urlFrontal = sImg(d.fotoFrontal, "INV_FRONTAL_" + placa);
+        var urlLatIzq = sImg(d.fotoLateralIzq, "INV_LATIZQ_" + placa);
+        var urlLatDer = sImg(d.fotoLateralDer, "INV_LATDER_" + placa);
+        var urlTrasera = sImg(d.fotoTrasera, "INV_TRASERA_" + placa);
+
+        // Conteo como números enteros
+        var carretillaVal = (d.carretilla !== undefined && d.carretilla !== null && d.carretilla !== "") ? Number(d.carretilla) : (d.carretillas !== undefined ? Number(d.carretillas) : 0);
+        var conosVal = (d.conos !== undefined && d.conos !== null && d.conos !== "") ? Number(d.conos) : 0;
+
+        // Fotos obligatorias de estribo
+        var urlEstriboIzq = sImg(d.estriboIzq, "INV_ESTRIBO_IZQ_" + placa);
+        var urlEstriboDer = sImg(d.estriboDer, "INV_ESTRIBO_DER_" + placa);
+
+        // Fotos de novedad opcionales (si no se tomó, celda vacía)
+        var urlNov1 = (d.novedad1 || d.fotoNovedad1) ? sImg(d.novedad1 || d.fotoNovedad1, "INV_NOV1_" + placa) : "";
+        var urlNov2 = (d.novedad2 || d.fotoNovedad2) ? sImg(d.novedad2 || d.fotoNovedad2, "INV_NOV2_" + placa) : "";
+        var urlNov3 = (d.novedad3 || d.fotoNovedad3) ? sImg(d.novedad3 || d.fotoNovedad3, "INV_NOV3_" + placa) : "";
+
+        var observacionVal = d.observacion || "";
+
+        // Escribir exactamente UNA fila con los 15 valores en orden (0 a 14)
+        s.appendRow([
+          fecha,            // 0: FECHA (dd/mm/yyyy)
+          placa,            // 1: PLACA
+          nombre,           // 2: NOMBRE (Edwion Correa, Leonardo Rodriguez, David Reales)
+          urlFrontal,       // 3: Foto Frontal
+          urlLatIzq,        // 4: Foto Lateral Izq.
+          urlLatDer,        // 5: Foto Lateral Der.
+          urlTrasera,       // 6: Foto Trasera
+          carretillaVal,    // 7: carretilla
+          conosVal,         // 8: conos
+          urlEstriboIzq,    // 9: estribo Izq.
+          urlEstriboDer,    // 10: estribo Der.
+          urlNov1,          // 11: novedad1
+          urlNov2,          // 12: novedad2
+          urlNov3,          // 13: novedad3
+          observacionVal    // 14: observacion
+        ]);
+
+        if (lock.hasLock()) lock.releaseLock();
+        return output("success", "Inventario diario registrado correctamente.");
+      }
     }
 
     lock.releaseLock();
