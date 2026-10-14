@@ -503,4 +503,22 @@ export interface NoveltyReportPayload {
   evidencia2?: string;
 }
 
+export interface VehicleInventoryPayload {
+  fecha: string;
+  plate: string;
+  inspector: string;
+  fotoFrontal: string;
+  fotoLateralIzq: string;
+  fotoLateralDer: string;
+  fotoTrasera: string;
+  carretillas: number;
+  conos: number;
+  novedad?: string;
+  fotoNovedad1?: string;
+  fotoNovedad2?: string;
+  fotoNovedad3?: string;
+  fotoNovedad4?: string;
+  observacion?: string;
+}
+
 

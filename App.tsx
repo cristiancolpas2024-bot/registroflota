@@ -50,6 +50,8 @@ import ExecutiveAuditDashboard from './components/ExecutiveAuditDashboard';
 import CalibrationVisuals from './components/CalibrationVisuals';
 import SparePartsModule from './components/SparePartsModule';
 import NoveltyReportModule from './components/NoveltyReportModule';
+import VehicleInventoryForm from './components/VehicleInventoryForm';
+import GestionHomeCards, { GestionModuleItem } from './components/GestionHomeCards';
 import ErrorBoundary from './components/ErrorBoundary';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -88,7 +90,8 @@ import {
   fetchAuditRecordsFromSheet,
   fetchAvailabilitySummaryFromSheet,
   fetchFleetStandardAuditFromSheet,
-  fetchNoveltyReportsFromSheet
+  fetchNoveltyReportsFromSheet,
+  submitVehicleInventory
 } from './services/sheetService';
 
 import { normalizePlate, normalizeStr, getWeekNumber } from './utils';
@@ -96,11 +99,63 @@ import {
   RefreshCw, Users, Truck, Search, Shield, ShieldCheck, Gavel, Menu, LogOut, Loader2, 
   Building2, ListFilter, CalendarDays, ClipboardList, Sparkles, Droplets, 
   Disc, Store, Gauge, Plus, History, Filter, Hash, Calendar, Clock, MapPin,
-  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronDown, ChevronUp, Wrench, Lock, X, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap, Package
+  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronDown, ChevronUp, Wrench, Lock, X, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap, Package, Home
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres';
-type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'repuestos';
+type ActiveView = 'inicio' | 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'repuestos' | 'inventario_diario';
+
+// Shared modules list for GESTIÓN: used by both Sidebar menu and Home Cards
+export const GESTION_MODULES: GestionModuleItem[] = [
+  { 
+    id: 'kilometrajes', 
+    label: 'Kilometrajes', 
+    icon: Gauge, 
+    description: 'Registro y control semanal del kilometraje por vehículo' 
+  },
+  { 
+    id: 'novedades', 
+    label: 'Novedades', 
+    icon: ClipboardList, 
+    description: 'Reporte y seguimiento de novedades mecánicas y operativas' 
+  },
+  { 
+    id: 'inventario_diario', 
+    label: 'Inventario Diario', 
+    icon: ClipboardCheck, 
+    description: 'Inspección diaria de equipos y verificación física con fotos' 
+  },
+  { 
+    id: 'repuestos', 
+    label: 'Repuestos', 
+    icon: Package, 
+    description: 'Gestión de repuestos y control de inventario de almacén' 
+  },
+  { 
+    id: 'limpieza', 
+    label: 'Limpieza 5S', 
+    icon: Sparkles, 
+    description: 'Auditoría y control de orden y limpieza 5S en cabinas' 
+  },
+  { 
+    id: 'visitas', 
+    label: 'Visitas a Taller', 
+    icon: Store, 
+    description: 'Control y seguimiento de ingresos de vehículos a talleres' 
+  },
+  { 
+    id: 'lavados', 
+    label: 'Lavados', 
+    icon: Droplets, 
+    description: 'Programación y verificación de lavado exterior de la flota' 
+  },
+  { 
+    id: 'calibraciones', 
+    label: 'Calibración', 
+    icon: Disc, 
+    description: 'Monitoreo y calibración de presión de llantas de la flota' 
+  },
+];
 
 function getCachedData<T>(key: string, defaultValue: T): T {
   try {
@@ -122,7 +177,7 @@ function setCachedData(key: string, data: any): void {
 
 const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('camiones');
-  const [activeView, setActiveView] = useState<ActiveView>('kilometrajes');
+  const [activeView, setActiveView] = useState<ActiveView>('inicio');
   const [expandedSection, setExpandedSection] = useState<string | null>('gestion');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -202,14 +257,14 @@ const App: React.FC = () => {
 
   const handleFlotaAccess = () => {
     setAppMode('camiones');
-    setActiveView('kilometrajes');
+    setActiveView('inicio');
     setExpandedSection('gestion');
   };
 
   const verifyPassword = () => {
     if (passwordInput === '1506') {
       setAppMode('camiones');
-      setActiveView('kilometrajes');
+      setActiveView('inicio');
       setExpandedSection('gestion');
       setShowPasswordModal(false);
     } else {
@@ -852,6 +907,17 @@ const App: React.FC = () => {
               </div>
               
               <nav className="flex-grow space-y-4 overflow-y-auto custom-scrollbar pr-2">
+                {/* INICIO OPTION AT TOP */}
+                <button 
+                  onClick={() => {
+                    setActiveView('inicio');
+                    setIsSidebarOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-4 px-6 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === 'inicio' ? 'bg-[#0F9D6E] text-white shadow-xl shadow-[#0F9D6E]/20' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}
+                >
+                  <Home size={18} className={activeView === 'inicio' ? 'text-white' : 'text-emerald-400'} /> Inicio
+                </button>
+
                 {/* GESTIÓN SECTION */}
                 <div className="space-y-2">
                   <button 
@@ -864,26 +930,22 @@ const App: React.FC = () => {
 
                   {expandedSection === 'gestion' && (
                     <div className="space-y-1 ml-2 border-l border-white/5 pl-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                      {[
-                         { id: 'kilometrajes', label: 'Kilometrajes', icon: <Gauge size={18}/> },
-                         { id: 'novedades', label: 'Novedades', icon: <ClipboardList size={18}/> },
-                         { id: 'repuestos', label: 'Repuestos', icon: <Package size={18}/> },
-                         { id: 'limpieza', label: 'Limpieza 5S', icon: <Sparkles size={18}/> },
-                         { id: 'visitas', label: 'Visitas a Taller', icon: <Store size={18}/> },
-                         { id: 'lavados', label: 'Lavados', icon: <Droplets size={18}/> },
-                         { id: 'calibraciones', label: 'Calibración', icon: <Disc size={18}/> },
-                       ].map(item => (
-                         <button 
-                           key={item.id}
-                           onClick={() => { 
-                             setActiveView(item.id as ActiveView); 
-                             setIsSidebarOpen(false); 
-                           }} 
-                           className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-                         >
-                           {item.icon} {item.label}
-                         </button>
-                       ))}
+                      {GESTION_MODULES.map(item => {
+                        const IconComponent = item.icon;
+                        const isActive = activeView === item.id;
+                        return (
+                          <button 
+                            key={item.id}
+                            onClick={() => { 
+                              setActiveView(item.id as ActiveView); 
+                              setIsSidebarOpen(false); 
+                            }} 
+                            className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${isActive ? 'bg-[#0F9D6E] text-white shadow-xl shadow-[#0F9D6E]/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                          >
+                            <IconComponent size={18} /> {item.label}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -899,22 +961,22 @@ const App: React.FC = () => {
 
       <main className="flex-grow flex flex-col h-screen overflow-hidden pb-16 xl:pb-0">
         {/* HEADER */}
-        <header className="bg-white border-b p-3 md:p-4 flex justify-between items-center shrink-0 shadow-sm z-10">
+        <header className={`${activeView === 'inicio' ? 'bg-[#0f172a] border-b border-slate-800 text-white' : 'bg-white border-b'} p-3 md:p-4 flex justify-between items-center shrink-0 shadow-sm z-10 transition-colors`}>
           <div className="flex items-center gap-2 md:gap-4 flex-grow">
-            <button onClick={() => setIsSidebarOpen(true)} className="xl:hidden p-2 text-slate-600"><Menu/></button>
-            <div className="bg-slate-50 border rounded-xl px-3 md:px-4 py-1.5 md:py-2 flex items-center gap-2 md:gap-3 w-full max-w-md shadow-inner">
+            <button onClick={() => setIsSidebarOpen(true)} className={`xl:hidden p-2 ${activeView === 'inicio' ? 'text-slate-300 hover:text-white' : 'text-slate-600'}`}><Menu/></button>
+            <div className={`${activeView === 'inicio' ? 'bg-slate-900 border border-slate-800 text-white' : 'bg-slate-50 border text-slate-800'} rounded-xl px-3 md:px-4 py-1.5 md:py-2 flex items-center gap-2 md:gap-3 w-full max-w-md shadow-inner transition-colors`}>
               <Search size={14} className="text-slate-400 md:size-4" />
               <input 
                 type="text" 
-                placeholder="BUSCAR..." 
-                className="bg-transparent font-black uppercase text-[9px] md:text-[10px] outline-none flex-grow" 
+                placeholder="BUSCAR MÓDULO O PLACA..." 
+                className={`bg-transparent font-black uppercase text-[9px] md:text-[10px] outline-none flex-grow ${activeView === 'inicio' ? 'placeholder:text-slate-500 text-white' : 'placeholder:text-slate-400 text-slate-800'}`} 
                 value={searchTerm} 
                 onChange={e => setSearchTerm(e.target.value.toUpperCase())} 
               />
             </div>
           </div>
           <div className="ml-2 md:ml-4 flex items-center gap-2 md:gap-3">
-             {activeView !== 'operadores' && (
+             {activeView !== 'operadores' && activeView !== 'inicio' && (
                <>
                  <div className="hidden lg:flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-xl">
                    <Building2 size={12} className="text-slate-400" />
@@ -939,23 +1001,23 @@ const App: React.FC = () => {
         </header>
 
         {/* BOTTOM NAV MOBILE */}
-        <nav className="fixed bottom-4 left-4 right-4 bg-[#0f172a] border border-slate-800 rounded-[2rem] flex justify-around items-center p-3 z-40 xl:hidden shadow-2xl shadow-indigo-950/40">
+        <nav className="fixed bottom-4 left-4 right-4 bg-[#0f172a] border border-slate-800 rounded-[2rem] flex justify-around items-center p-2 sm:p-3 z-40 xl:hidden shadow-2xl shadow-indigo-950/40">
           {[
-            { id: 'kilometrajes', icon: <Gauge size={22} className="stroke-[2.25]" />, label: 'KMs' },
-            { id: 'novedades', icon: <ClipboardList size={22} className="stroke-[2.25]" />, label: 'Novs' },
-            { id: 'repuestos', icon: <Package size={22} className="stroke-[2.25]" />, label: 'Repuestos' },
-            { id: 'limpieza', icon: <Sparkles size={22} className="stroke-[2.25]" />, label: '5S' },
-            { id: 'lavados', icon: <Droplets size={22} className="stroke-[2.25]" />, label: 'Lavados' },
+            { id: 'inicio', icon: <Home size={20} className="stroke-[2.25]" />, label: 'Inicio' },
+            { id: 'kilometrajes', icon: <Gauge size={20} className="stroke-[2.25]" />, label: 'KMs' },
+            { id: 'novedades', icon: <ClipboardList size={20} className="stroke-[2.25]" />, label: 'Novs' },
+            { id: 'inventario_diario', icon: <ClipboardCheck size={20} className="stroke-[2.25]" />, label: 'Inventario' },
+            { id: 'repuestos', icon: <Package size={20} className="stroke-[2.25]" />, label: 'Repuestos' },
           ].map(item => {
             const isActive = activeView === item.id;
             return (
               <button 
                 key={item.id}
                 onClick={() => setActiveView(item.id as ActiveView)}
-                className={`flex-1 flex flex-col items-center justify-center p-2 rounded-2xl transition-all duration-300 relative ${isActive ? 'text-indigo-400 scale-105' : 'text-slate-400 hover:text-slate-200'}`}
+                className={`flex-1 flex flex-col items-center justify-center p-1.5 rounded-2xl transition-all duration-300 relative ${isActive ? 'text-[#0F9D6E] scale-105' : 'text-slate-400 hover:text-slate-200'}`}
               >
                 {isActive && (
-                  <span className="absolute -top-1 w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse shadow-md shadow-indigo-500" />
+                  <span className="absolute -top-1 w-1.5 h-1.5 bg-[#0F9D6E] rounded-full animate-pulse shadow-md shadow-[#0F9D6E]" />
                 )}
                 {item.icon}
                 <span className={`text-[8px] font-black uppercase tracking-widest mt-1 text-center truncate ${isActive ? 'text-white' : 'text-slate-500'}`}>
@@ -967,7 +1029,15 @@ const App: React.FC = () => {
         </nav>
 
         {/* CONTENT AREA */}
-        <div className="flex-grow p-3 md:p-8 pb-32 xl:pb-8 overflow-y-auto bg-[#F0F4FF] custom-scrollbar">
+        <div className={`flex-grow ${activeView === 'inicio' ? 'bg-[#0a0f1d] p-4 sm:p-6 md:p-8' : 'bg-[#F0F4FF] p-3 md:p-8'} pb-32 xl:pb-8 overflow-y-auto custom-scrollbar`}>
+          
+          {activeView === 'inicio' && (
+            <GestionHomeCards 
+              modules={GESTION_MODULES} 
+              onSelectModule={(id) => setActiveView(id as ActiveView)} 
+              searchTerm={searchTerm}
+            />
+          )}
           
           {activeView === 'indicadoresOperativos' && (
             <OperationalDashboard 
@@ -1457,6 +1527,22 @@ const App: React.FC = () => {
                       handleSyncData(); 
                     } catch (err) {
                       console.error("Error al registrar calibración:", err);
+                    }
+                  }} 
+                />
+              </ErrorBoundary>
+            </div>
+          )}
+
+          {activeView === 'inventario_diario' && (
+            <div className="max-w-xl mx-auto py-2 sm:py-6 pb-32 px-2 sm:px-4">
+              <ErrorBoundary fallbackMessage="Error en el módulo de inventario diario">
+                <VehicleInventoryForm 
+                  vehicles={vehicles} 
+                  onSubmit={async (d) => { 
+                    const ok = await submitVehicleInventory(d); 
+                    if (!ok) {
+                      throw new Error("No se pudo registrar el inventario diario en la hoja.");
                     }
                   }} 
                 />

@@ -2457,5 +2457,19 @@ export const fetchNoveltyReportsFromSheet = async (): Promise<NoveltyReport[]> =
   return [];
 };
 
-
-
+export const submitVehicleInventory = async (data: any): Promise<boolean> => {
+  const payload = {
+    method: 'POST_INVENTARIO',
+    data: { ...data, docId: '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU', sheetName: 'INVENTARIO DIARIO' }
+  };
+  try {
+    const result = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, true);
+    if (result && typeof result === 'object' && (result as any).status === 'success') return true;
+    if (result === true) return true;
+    return true; // llegó pero sin confirmación legible: NO reintentar (evita duplicado)
+  } catch (e) {
+    console.warn('Inventario error de red, fallback único:', e);
+    const ok = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, false);
+    return !!ok;
+  }
+};
