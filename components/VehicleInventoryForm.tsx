@@ -1,5 +1,11 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { Vehicle, VehicleInventoryPayload } from '../types';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { Vehicle, VehicleInventoryPayload, InventoryQueueItem } from '../types';
+import { 
+  enqueueInventory, 
+  subscribeToInventoryQueue, 
+  retryQueueItem, 
+  retryAllFailed 
+} from '../services/inventoryQueueService';
 import { 
   ClipboardCheck, 
   Camera, 
@@ -13,28 +19,29 @@ import {
   Trash2, 
   ImageIcon,
   RefreshCw,
-  AlertTriangle
+  AlertTriangle,
+  Cloud
 } from 'lucide-react';
 
 interface VehicleInventoryFormProps {
   vehicles: Vehicle[];
-  onSubmit: (data: VehicleInventoryPayload) => Promise<boolean | void>;
+  onSubmit?: (data: VehicleInventoryPayload) => Promise<boolean | void>;
 }
 
 // Opciones exactas de Nombre
 export const INSPECTORES_INVENTARIO = [
-  'Edwion Correa',
+  'Edwin Correa',
   'Leonardo Rodriguez',
   'David Reales'
 ] as const;
 
-// Compresor canvas: máx 1600px, JPEG 0.85
+// Compresor canvas: máx 1280px de lado mayor, calidad JPEG 0.7
 const comprimirFoto = (file: File): Promise<string> => new Promise((resolve, reject) => {
   const reader = new FileReader();
   reader.onload = (ev) => {
     const img = new Image();
     img.onload = () => {
-      const maxLado = 1600;
+      const maxLado = 1280;
       const scale = Math.min(1, maxLado / Math.max(img.width, img.height));
       const canvas = document.createElement('canvas');
       canvas.width = Math.round(img.width * scale);
@@ -45,7 +52,7 @@ const comprimirFoto = (file: File): Promise<string> => new Promise((resolve, rej
         return;
       }
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', 0.85));
+      resolve(canvas.toDataURL('image/jpeg', 0.7));
     };
     img.onerror = reject;
     img.src = ev.target?.result as string;
@@ -103,6 +110,25 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
   const [processingField, setProcessingField] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Estado de la cola local (IndexedDB)
+  const [queueItems, setQueueItems] = useState<InventoryQueueItem[]>([]);
+  const [isRetryingAll, setIsRetryingAll] = useState<boolean>(false);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToInventoryQueue((items) => {
+      setQueueItems(items);
+    });
+    return unsubscribe;
+  }, []);
+
+  const failedItems = useMemo(() => {
+    return queueItems.filter((item) => (item.retryCount || 0) >= 5);
+  }, [queueItems]);
+
+  const isSyncing = useMemo(() => {
+    return queueItems.some((item) => item.status === 'uploading');
+  }, [queueItems]);
 
   // Referencias a inputs de archivo
   const frontalCameraRef = useRef<HTMLInputElement>(null);
@@ -255,9 +281,13 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
     setIsSubmitting(true);
 
     try {
-      const payload: VehicleInventoryPayload = {
-        fecha: formatToDDMMYYYY(fecha),
-        plate: plate.toUpperCase().trim(),
+      const cleanPlate = plate.toUpperCase().trim();
+      const formattedDate = formatToDDMMYYYY(fecha);
+
+      // Guardar de inmediato en la cola local IndexedDB (< 100ms)
+      await enqueueInventory({
+        fecha: formattedDate,
+        plate: cleanPlate,
         nombre,
         fotoFrontal,
         fotoLateralIzq,
@@ -271,24 +301,19 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
         novedad2: novedad2 || '',
         novedad3: novedad3 || '',
         observacion: observacion.trim(),
-        // Compatibilidad adicional
         inspector: nombre,
         carretillas: numCarretilla
-      };
+      });
 
-      const result = await onSubmit(payload);
-      if (result === false) {
-        throw new Error('El servidor respondió con error al guardar el inventario diario.');
-      }
-
-      setSuccessMessage(`¡Inventario del vehículo ${plate.toUpperCase()} guardado correctamente!`);
+      // Muestra de inmediato "✓ Inventario registrado" y limpia el formulario para el siguiente vehículo
+      setSuccessMessage(`✓ Inventario registrado para la placa ${cleanPlate}.`);
       resetForm();
 
       // Scroll arriba para ver la confirmación
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
-      console.error('Error al registrar inventario:', err);
-      setErrorMessage(err?.message || 'Error al guardar el inventario. Por favor verifique la conexión y reintente.');
+      console.error('Error al guardar en cola local:', err);
+      setErrorMessage(err?.message || 'Error al guardar el inventario en la cola local. Por favor reintenta.');
     } finally {
       setIsSubmitting(false);
     }
@@ -364,7 +389,7 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
                 className="w-full h-full object-cover"
               />
               <div className="absolute top-2 right-2 bg-black/60 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
-                1600px • 0.85
+                1280px • 0.7
               </div>
             </div>
 
@@ -443,7 +468,7 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       {/* Encabezado */}
-      <div className="p-5 sm:p-6 bg-[#0f172a] text-white flex items-center justify-between border-b border-slate-800">
+      <div className="p-5 sm:p-6 bg-[#0f172a] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800">
         <div className="space-y-1">
           <h2 className="text-lg sm:text-xl font-black uppercase tracking-tight flex items-center gap-2">
             <ClipboardCheck size={22} className="text-[#0F9D6E]" /> Inventario Diario
@@ -452,7 +477,102 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
             Registro y verificación física del vehículo con soporte fotográfico
           </p>
         </div>
+
+        {/* Indicador de estado de la cola de sincronización */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {queueItems.length === 0 ? (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold tracking-wide">
+              <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
+              <span>✓ Todo sincronizado</span>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              {failedItems.length > 0 ? (
+                <div className="flex items-center gap-2">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-bold animate-pulse">
+                    <AlertTriangle size={14} className="text-rose-400 shrink-0" />
+                    <span>{failedItems.length} con error al enviar</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setIsRetryingAll(true);
+                      try {
+                        await retryAllFailed();
+                      } finally {
+                        setTimeout(() => setIsRetryingAll(false), 800);
+                      }
+                    }}
+                    disabled={isRetryingAll}
+                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1 shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw size={12} className={isRetryingAll ? "animate-spin" : ""} />
+                    <span>Reintentar</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sky-500/15 border border-sky-500/30 text-sky-300 text-xs font-bold tracking-wide">
+                  {isSyncing ? (
+                    <Loader2 size={14} className="animate-spin text-sky-400 shrink-0" />
+                  ) : (
+                    <span className="text-sky-400 text-sm">☁</span>
+                  )}
+                  <span>☁ {queueItems.length} pendiente{queueItems.length > 1 ? 's' : ''} por enviar</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Alerta de registros con más de 5 fallos */}
+      {failedItems.length > 0 && (
+        <div className="p-4 mx-4 sm:mx-6 mt-4 sm:mt-6 bg-rose-50 border border-rose-200 rounded-2xl space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={18} className="text-rose-600 shrink-0" />
+              <h4 className="text-xs font-black uppercase text-rose-900 tracking-wide">
+                Atención: {failedItems.length} registro(s) han fallado más de 5 veces
+              </h4>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                setIsRetryingAll(true);
+                try {
+                  await retryAllFailed();
+                } finally {
+                  setTimeout(() => setIsRetryingAll(false), 800);
+                }
+              }}
+              disabled={isRetryingAll}
+              className="text-xs font-black text-rose-700 hover:text-rose-900 underline cursor-pointer"
+            >
+              Reintentar todos
+            </button>
+          </div>
+          <div className="space-y-2 pt-1">
+            {failedItems.map((fi) => (
+              <div key={fi.id} className="p-3 bg-white rounded-xl border border-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div>
+                  <span className="font-black text-slate-900 mr-2">{fi.plate}</span>
+                  <span className="text-slate-500">{fi.fecha} • {fi.nombre} • {fi.retryCount} reintentos</span>
+                  {fi.lastError && (
+                    <p className="text-[11px] text-rose-600 font-medium mt-0.5">{fi.lastError}</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => retryQueueItem(fi.id)}
+                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold rounded-lg shrink-0 cursor-pointer text-xs self-start sm:self-auto"
+                >
+                  Reintentar
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Mensaje de Confirmación */}
       {successMessage && (
@@ -703,7 +823,7 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
           />
         </div>
 
-        {/* BOTÓN GUARDAR INVENTARIO */}
+        {/* BOTÓN REGISTRAR INVENTARIO */}
         <div className="pt-2">
           <button
             type="submit"
@@ -713,20 +833,20 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
           >
             {isSubmitting ? (
               <>
-                <Loader2 size={20} className="animate-spin" /> Guardando Inventario...
+                <Loader2 size={20} className="animate-spin" /> Registrando...
               </>
             ) : processingField ? (
               <>
-                <Loader2 size={20} className="animate-spin" /> Procesando Imagen...
+                <Loader2 size={20} className="animate-spin" /> Comprimiendo Foto...
               </>
             ) : (
               <>
-                <ClipboardCheck size={20} /> Guardar Inventario
+                <ClipboardCheck size={20} /> Registrar Inventario
               </>
             )}
           </button>
           <p className="text-[10px] text-center text-slate-400 font-bold uppercase mt-2">
-            Se registrará en la pestaña INVENTARIO DIARIO del Google Sheet
+            Guardado inmediato con sincronización en segundo plano a Google Sheets
           </p>
         </div>
       </form>

@@ -1646,33 +1646,47 @@ export const submitWorkshopRecordToSheet = async (data: any): Promise<void> => {
  * DRIVE UPLOAD
  */
 export const uploadImageToDrive = async (base64Data: string, fileName: string): Promise<string> => {
-  try {
-    const payload = {
-      method: 'UPLOAD_IMAGE',
-      data: {
-        base64: base64Data,
-        name: fileName
-      }
-    };
-    
-    const response = await fetch(GOOGLE_SCRIPT_AUDIT_URL, {
-      method: 'POST',
-      mode: 'cors',
-      headers: {
-        'Content-Type': 'text/plain',
-      },
-      body: JSON.stringify(payload)
-    });
+  if (!base64Data || typeof base64Data !== 'string') return '';
+  if (base64Data.startsWith('http')) return base64Data; // Ya es un URL
 
-    const result = await response.json();
-    if (result.status === 'success') {
-      return result.message; // El URL viene en el campo message según el formato estándar de GAS
+  const payload = {
+    method: 'UPLOAD_IMAGE',
+    data: {
+      base64: base64Data,
+      name: fileName
     }
-    throw new Error(result.message || 'Error al subir a Drive');
-  } catch (error) {
-    console.error("Error uploadImageToDrive:", error);
-    throw error;
+  };
+
+  const urlsToTry = [
+    OPERATIONAL_SCRIPT_URL,
+    GOOGLE_SCRIPT_AUDIT_URL,
+    GOOGLE_SCRIPT_WEB_APP_URL
+  ];
+
+  let lastError: any = null;
+  for (const url of urlsToTry) {
+    if (!url) continue;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        mode: 'cors',
+        headers: {
+          'Content-Type': 'text/plain',
+        },
+        body: JSON.stringify(payload)
+      });
+      const result = await response.json();
+      if (result && result.status === 'success') {
+        return result.message; // El link de Drive viene en el campo message
+      }
+      lastError = new Error(result?.message || 'Error al subir a Drive');
+    } catch (err) {
+      lastError = err;
+    }
   }
+
+  console.error("Error uploadImageToDrive:", lastError);
+  throw lastError || new Error('No se pudo subir la imagen a Drive');
 };
 
 /**
@@ -2466,7 +2480,17 @@ export const submitVehicleInventory = async (data: VehicleInventoryPayload | any
     const result = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, true);
     if (result && typeof result === 'object' && (result as any).status === 'success') return true;
     if (result && typeof result === 'object' && (result as any).status === 'error') {
-      console.error('Error Apps Script al guardar inventario:', (result as any).message);
+      const errMsg = String((result as any).message || '');
+      console.error('Error Apps Script al guardar inventario:', errMsg);
+      if (errMsg.toLowerCase().includes('no soportado')) {
+        console.warn('Método no soportado en script operativo, probando script principal...');
+        try {
+          const res2 = await sendToGAS(payload, GOOGLE_SCRIPT_WEB_APP_URL, true);
+          if (res2 && typeof res2 === 'object' && (res2 as any).status === 'success') return true;
+        } catch (e2) {
+          console.warn('Reintento en script principal falló:', e2);
+        }
+      }
       return false;
     }
     if (result === true) return true;

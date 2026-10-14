@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Calendar } from 'lucide-react';
+import { Calendar, ChevronRight } from 'lucide-react';
 
 export interface GestionModuleItem {
   id: string;
@@ -47,33 +47,29 @@ export const GestionHomeCards: React.FC<GestionHomeCardsProps> = ({
   }, [modules, searchTerm]);
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      {/* Encabezado: "Gestión Flota BQA" y la fecha de hoy */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-slate-800">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tight">
-            Gestión Flota BQA
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-400 font-medium mt-1">
-            Módulos operativos de la flota
-          </p>
-        </div>
-
-        {/* Fecha de hoy */}
-        <div className="flex items-center gap-2.5 text-slate-300 self-start sm:self-auto py-1.5 px-3 rounded-xl bg-[#131d36] border border-slate-800 text-xs sm:text-sm font-semibold">
-          <Calendar size={16} className="text-[#0F9D6E] shrink-0" />
-          <span>{todayFormatted}</span>
+    <div className="w-full max-w-[480px] mx-auto space-y-4">
+      {/* Encabezado: "GESTIÓN FLOTA BQA", descripción y fecha abajo en texto pequeño */}
+      <div className="pb-3 border-b border-slate-800">
+        <h1 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight">
+          GESTIÓN FLOTA BQA
+        </h1>
+        <p className="text-xs text-slate-400 font-medium mt-0.5">
+          Módulos operativos de la flota
+        </p>
+        <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-slate-400 font-medium mt-2">
+          <Calendar size={13} className="text-[#0F9D6E] shrink-0" />
+          <span className="capitalize">{todayFormatted}</span>
         </div>
       </div>
 
-      {/* Cuadrícula: 4 columnas en escritorio, 2 en tablet, 1 en celular */}
+      {/* Lista vertical de módulos: una columna en todas las pantallas, max 480px, centrada */}
       {filteredModules.length === 0 ? (
-        <div className="p-10 text-center rounded-2xl bg-[#131d36] border border-slate-800 text-slate-400">
-          <p className="text-sm font-bold text-slate-300">No se encontraron módulos coincidentes</p>
-          <p className="text-xs mt-1">Verifica el término en la barra de búsqueda</p>
+        <div className="p-6 text-center rounded-[14px] bg-[#131d36] border border-slate-800 text-slate-400">
+          <p className="text-xs font-bold text-slate-300">No se encontraron módulos coincidentes</p>
+          <p className="text-[11px] mt-0.5">Verifica el término en la barra de búsqueda</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="flex flex-col gap-[10px]">
           {filteredModules.map((item) => {
             const IconComponent = item.icon;
             return (
@@ -81,22 +77,28 @@ export const GestionHomeCards: React.FC<GestionHomeCardsProps> = ({
                 key={item.id}
                 type="button"
                 onClick={() => onSelectModule(item.id)}
-                className="group flex flex-col justify-start p-5 rounded-2xl bg-[#131d36] border border-slate-800 hover:border-[#0F9D6E] hover:-translate-y-1 hover:shadow-lg hover:shadow-black/30 transition-all duration-200 text-left cursor-pointer"
+                className="group w-full h-[72px] min-h-[72px] px-3.5 flex items-center justify-between rounded-[14px] bg-[#131d36] border border-slate-800 hover:border-[#0F9D6E] hover:bg-[#18233f] active:border-[#0F9D6E] active:bg-[#1a2644] active:scale-[0.99] transition-all duration-150 text-left cursor-pointer touch-manipulation select-none"
               >
-                {/* Ícono del módulo */}
-                <div className="w-11 h-11 rounded-xl bg-slate-800/80 text-[#0F9D6E] group-hover:bg-[#0F9D6E]/15 flex items-center justify-center transition-colors mb-4 shrink-0">
+                {/* Ícono en cuadro 44x44 */}
+                <div className="w-[44px] h-[44px] min-w-[44px] rounded-[10px] bg-slate-800/80 text-[#0F9D6E] group-hover:bg-[#0F9D6E]/15 group-active:bg-[#0F9D6E]/20 flex items-center justify-center shrink-0 transition-colors">
                   <IconComponent size={22} />
                 </div>
 
-                {/* Nombre del módulo */}
-                <h2 className="text-base font-black text-white uppercase tracking-wide group-hover:text-[#0F9D6E] transition-colors">
-                  {item.label}
-                </h2>
+                {/* Nombre del módulo en negrita + descripción corta debajo (1 línea con '...') */}
+                <div className="flex-1 min-w-0 px-3">
+                  <p className="text-sm font-bold text-white uppercase tracking-wide truncate group-hover:text-[#0F9D6E] transition-colors leading-tight">
+                    {item.label}
+                  </p>
+                  <p className="text-xs text-slate-400 font-normal truncate mt-0.5 leading-normal">
+                    {item.description}
+                  </p>
+                </div>
 
-                {/* Descripción corta de una línea */}
-                <p className="text-xs text-slate-400 font-normal leading-relaxed mt-1.5 line-clamp-2">
-                  {item.description}
-                </p>
+                {/* Flecha › a la derecha */}
+                <ChevronRight
+                  size={18}
+                  className="text-slate-500 group-hover:text-[#0F9D6E] group-active:text-[#0F9D6E] shrink-0 transition-colors"
+                />
               </button>
             );
           })}

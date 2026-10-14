@@ -687,13 +687,27 @@ function doPost(e) {
         var docId = d.docId || ID_HOJA;
         var ss = SpreadsheetApp.openById(docId);
         var sheetName = d.sheetName || "INVENTARIO DIARIO";
-        var s = ss.getSheetByName(sheetName) || getSheetByGid(ss, "849297780") || getS(ss, sheetName);
+        var s = ss.getSheetByName(sheetName) || getSheetByGid(ss, "849297780") || findSheetCaseInsensitive(ss, sheetName) || getS(ss, sheetName);
         if (!s) {
           if (lock.hasLock()) lock.releaseLock();
           return output("error", "No se encontró la pestaña '" + sheetName + "' en el documento.");
         }
 
-        // Si la hoja está vacía, crear los 15 encabezados exactos (índices 0 a 14)
+        var regId = (d.id || d.registroId || "").toString().trim();
+
+        // Verificar si este ID ya existe en la columna 16 para evitar duplicados en reintentos
+        if (regId && s.getLastRow() > 1) {
+          var lastRow = s.getLastRow();
+          var idValues = s.getRange(2, 16, lastRow - 1, 1).getValues();
+          for (var i = 0; i < idValues.length; i++) {
+            if (String(idValues[i][0]).trim() === regId) {
+              if (lock.hasLock()) lock.releaseLock();
+              return output("success", "Inventario ya registrado previamente (duplicado evitado)");
+            }
+          }
+        }
+
+        // Si la hoja está vacía, crear los encabezados exactos (0 a 14) y la columna 15 oculta
         if (s.getLastRow() === 0) {
           s.appendRow([
             "FECHA",
@@ -710,7 +724,8 @@ function doPost(e) {
             "novedad1",
             "novedad2",
             "novedad3",
-            "observacion"
+            "observacion",
+            "ID_REGISTRO"
           ]);
         }
 
@@ -718,7 +733,7 @@ function doPost(e) {
         var fecha = d.fecha || Utilities.formatDate(new Date(), "GMT-5", "dd/MM/yyyy");
         var nombre = d.nombre || d.inspector || "";
 
-        // Subir fotos fijas obligatorias a Drive
+        // Subir fotos fijas obligatorias a Drive (si ya es URL http, sImg la retorna tal cual)
         var urlFrontal = sImg(d.fotoFrontal, "INV_FRONTAL_" + placa);
         var urlLatIzq = sImg(d.fotoLateralIzq, "INV_LATIZQ_" + placa);
         var urlLatDer = sImg(d.fotoLateralDer, "INV_LATDER_" + placa);
@@ -739,7 +754,7 @@ function doPost(e) {
 
         var observacionVal = d.observacion || "";
 
-        // Escribir exactamente UNA fila con los 15 valores en orden (0 a 14)
+        // Escribir exactamente UNA fila con los 15 valores en orden (0 a 14) + columna oculta ID (15)
         s.appendRow([
           fecha,            // 0: FECHA (dd/mm/yyyy)
           placa,            // 1: PLACA
@@ -755,7 +770,8 @@ function doPost(e) {
           urlNov1,          // 11: novedad1
           urlNov2,          // 12: novedad2
           urlNov3,          // 13: novedad3
-          observacionVal    // 14: observacion
+          observacionVal,   // 14: observacion
+          regId             // 15: ID único (columna oculta)
         ]);
 
         if (lock.hasLock()) lock.releaseLock();
@@ -775,6 +791,17 @@ function getSheetByGid(ss, gid) {
   var sheets = ss.getSheets();
   for (var i = 0; i < sheets.length; i++) {
     if (sheets[i].getSheetId().toString() === gid.toString()) {
+      return sheets[i];
+    }
+  }
+  return null;
+}
+
+function findSheetCaseInsensitive(ss, name) {
+  var sheets = ss.getSheets();
+  var target = (name || "").toString().trim().toUpperCase();
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].getName().toString().trim().toUpperCase() === target) {
       return sheets[i];
     }
   }

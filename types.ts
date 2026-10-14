@@ -504,6 +504,7 @@ export interface NoveltyReportPayload {
 }
 
 export interface VehicleInventoryPayload {
+  id?: string; // ID único para deduplicación: fecha + placa + timestamp
   fecha: string; // Formato dd/mm/yyyy
   plate: string;
   nombre: 'Edwion Correa' | 'Leonardo Rodriguez' | 'David Reales' | string;
@@ -522,6 +523,46 @@ export interface VehicleInventoryPayload {
   // Aliases de compatibilidad
   inspector?: string;
   carretillas?: number;
+}
+
+export interface InventoryQueueItem {
+  id: string; // ID único: fecha + placa + timestamp
+  fecha: string; // dd/mm/yyyy
+  plate: string;
+  nombre: string;
+  fotoFrontal: string;
+  fotoLateralIzq: string;
+  fotoLateralDer: string;
+  fotoTrasera: string;
+  carretilla: number;
+  conos: number;
+  estriboIzq: string;
+  estriboDer: string;
+  novedad1?: string;
+  novedad2?: string;
+  novedad3?: string;
+  observacion?: string;
+  inspector?: string;
+  carretillas?: number;
+
+  // URLs de Drive ya subidas (para reintentos parciales y subida en paralelo)
+  uploadedUrls: {
+    fotoFrontal?: string;
+    fotoLateralIzq?: string;
+    fotoLateralDer?: string;
+    fotoTrasera?: string;
+    estriboIzq?: string;
+    estriboDer?: string;
+    novedad1?: string;
+    novedad2?: string;
+    novedad3?: string;
+  };
+
+  status: 'pending' | 'uploading' | 'failed' | 'completed';
+  retryCount: number;
+  lastError?: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 

@@ -51,6 +51,7 @@ import CalibrationVisuals from './components/CalibrationVisuals';
 import SparePartsModule from './components/SparePartsModule';
 import NoveltyReportModule from './components/NoveltyReportModule';
 import VehicleInventoryForm from './components/VehicleInventoryForm';
+import { initInventoryQueueAutoSync } from './services/inventoryQueueService';
 import GestionHomeCards, { GestionModuleItem } from './components/GestionHomeCards';
 import ErrorBoundary from './components/ErrorBoundary';
 import { 
@@ -275,6 +276,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     handleSyncData();
+    initInventoryQueueAutoSync();
     
     // Auto-refresh data every 5 minutes
     const intervalId = setInterval(() => {
@@ -1536,12 +1538,6 @@ const App: React.FC = () => {
               <ErrorBoundary fallbackMessage="Error en el módulo de inventario diario">
                 <VehicleInventoryForm 
                   vehicles={vehicles} 
-                  onSubmit={async (d) => { 
-                    const ok = await submitVehicleInventory(d); 
-                    if (!ok) {
-                      throw new Error("No se pudo registrar el inventario diario en la hoja.");
-                    }
-                  }} 
                 />
               </ErrorBoundary>
             </div>
