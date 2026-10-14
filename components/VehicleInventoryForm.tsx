@@ -108,18 +108,52 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
   // Estado del formulario
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [processingField, setProcessingField] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Estados para Overlay de confirmación pantalla completa
+  const [showSuccessOverlay, setShowSuccessOverlay] = useState<boolean>(false);
+  const [isOverlayFadingOut, setIsOverlayFadingOut] = useState<boolean>(false);
+  const [overlayData, setOverlayData] = useState<{ plate: string; nombre: string } | null>(null);
+  const autoCloseTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Estado de la cola local (IndexedDB)
   const [queueItems, setQueueItems] = useState<InventoryQueueItem[]>([]);
   const [isRetryingAll, setIsRetryingAll] = useState<boolean>(false);
+
+  // Indicador de pendientes: delay de 3s para evitar parpadeos si se envía rápido
+  const [showPendingBadge, setShowPendingBadge] = useState<boolean>(false);
+  const pendingBadgeTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const unsubscribe = subscribeToInventoryQueue((items) => {
       setQueueItems(items);
     });
     return unsubscribe;
+  }, []);
+
+  // Evitar que el indicador "pendientes por enviar" parpadee si el envío tarda menos de 3s
+  useEffect(() => {
+    const pendingNonFailed = queueItems.filter((item) => (item.retryCount || 0) < 5);
+
+    if (pendingNonFailed.length === 0) {
+      if (pendingBadgeTimerRef.current) {
+        clearTimeout(pendingBadgeTimerRef.current);
+        pendingBadgeTimerRef.current = null;
+      }
+      setShowPendingBadge(false);
+    } else if (!showPendingBadge && !pendingBadgeTimerRef.current) {
+      pendingBadgeTimerRef.current = setTimeout(() => {
+        setShowPendingBadge(true);
+        pendingBadgeTimerRef.current = null;
+      }, 3000);
+    }
+  }, [queueItems, showPendingBadge]);
+
+  useEffect(() => {
+    return () => {
+      if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+      if (pendingBadgeTimerRef.current) clearTimeout(pendingBadgeTimerRef.current);
+    };
   }, []);
 
   const failedItems = useMemo(() => {
@@ -129,6 +163,21 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
   const isSyncing = useMemo(() => {
     return queueItems.some((item) => item.status === 'uploading');
   }, [queueItems]);
+
+  // Cierre suave del overlay de pantalla completa
+  const closeOverlay = () => {
+    if (autoCloseTimerRef.current) {
+      clearTimeout(autoCloseTimerRef.current);
+      autoCloseTimerRef.current = null;
+    }
+    setIsOverlayFadingOut(true);
+    setTimeout(() => {
+      setShowSuccessOverlay(false);
+      setIsOverlayFadingOut(false);
+      setOverlayData(null);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 300);
+  };
 
   // Referencias a inputs de archivo
   const frontalCameraRef = useRef<HTMLInputElement>(null);
@@ -217,7 +266,6 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
     if (isSubmitting) return;
 
     setErrorMessage(null);
-    setSuccessMessage(null);
 
     // 1. Validaciones generales
     if (!fecha) {
@@ -231,7 +279,7 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
     }
 
     if (!nombre) {
-      setErrorMessage('Por favor selecciona el NOMBRE de quien registra (Edwion Correa, Leonardo Rodriguez o David Reales).');
+      setErrorMessage('Por favor selecciona el NOMBRE de quien registra (Edwin Correa, Leonardo Rodriguez o David Reales).');
       return;
     }
 
@@ -278,17 +326,30 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
       return;
     }
 
+    // Desactivar botón de inmediato para evitar doble envío
     setIsSubmitting(true);
 
-    try {
-      const cleanPlate = plate.toUpperCase().trim();
-      const formattedDate = formatToDDMMYYYY(fecha);
+    const cleanPlate = plate.toUpperCase().trim();
+    const formattedDate = formatToDDMMYYYY(fecha);
+    const inspectorNombre = nombre;
 
-      // Guardar de inmediato en la cola local IndexedDB (< 100ms)
-      await enqueueInventory({
+    try {
+      // 1. Mostrar de inmediato la PANTALLA COMPLETA de confirmación (sin parpadeo)
+      setOverlayData({ plate: cleanPlate, nombre: inspectorNombre });
+      setShowSuccessOverlay(true);
+      setIsOverlayFadingOut(false);
+
+      // Programar cierre automático a los 4 segundos con fade-out de 300ms
+      if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+      autoCloseTimerRef.current = setTimeout(() => {
+        closeOverlay();
+      }, 4000);
+
+      // 2. Guardar en cola local IndexedDB en segundo plano
+      enqueueInventory({
         fecha: formattedDate,
         plate: cleanPlate,
-        nombre,
+        nombre: inspectorNombre,
         fotoFrontal,
         fotoLateralIzq,
         fotoLateralDer,
@@ -301,19 +362,17 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
         novedad2: novedad2 || '',
         novedad3: novedad3 || '',
         observacion: observacion.trim(),
-        inspector: nombre,
+        inspector: inspectorNombre,
         carretillas: numCarretilla
+      }).catch((err) => {
+        console.error('Error al guardar en cola local:', err);
       });
 
-      // Muestra de inmediato "✓ Inventario registrado" y limpia el formulario para el siguiente vehículo
-      setSuccessMessage(`✓ Inventario registrado para la placa ${cleanPlate}.`);
+      // 3. Limpiar el formulario POR DETRÁS (sin que el usuario lo vea)
       resetForm();
-
-      // Scroll arriba para ver la confirmación
-      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
-      console.error('Error al guardar en cola local:', err);
-      setErrorMessage(err?.message || 'Error al guardar el inventario en la cola local. Por favor reintenta.');
+      console.error('Error al procesar registro:', err);
+      setErrorMessage(err?.message || 'Error al procesar el inventario. Por favor reintenta.');
     } finally {
       setIsSubmitting(false);
     }
@@ -466,131 +525,170 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-      {/* Encabezado */}
-      <div className="p-5 sm:p-6 bg-[#0f172a] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800">
-        <div className="space-y-1">
-          <h2 className="text-lg sm:text-xl font-black uppercase tracking-tight flex items-center gap-2">
-            <ClipboardCheck size={22} className="text-[#0F9D6E]" /> Inventario Diario
-          </h2>
-          <p className="text-xs text-slate-400 font-medium">
-            Registro y verificación física del vehículo con soporte fotográfico
-          </p>
+    <>
+      {/* 1. OVERLAY DE PANTALLA COMPLETA: CONFIRMACIÓN INMEDIATA */}
+      {showSuccessOverlay && overlayData && (
+        <div 
+          className={`fixed inset-0 z-[100] flex flex-col justify-between p-6 sm:p-8 bg-gradient-to-b from-[#0F9D6E] via-[#0d8c62] to-[#096346] text-white transition-opacity duration-300 ease-in-out select-none ${
+            isOverlayFadingOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          }`}
+          style={{ willChange: 'opacity' }}
+        >
+          {/* Badge superior sutil */}
+          <div className="w-full flex justify-end pt-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-100/70 bg-black/15 px-3 py-1 rounded-full border border-white/10">
+              Gestión Flota BQA
+            </span>
+          </div>
+
+          {/* Bloque central: Ícono grande animado, Título, Placa, Inspector */}
+          <div className="flex flex-col items-center justify-center text-center my-auto px-4 max-w-sm mx-auto w-full">
+            {/* Ícono animado de check */}
+            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-white/20 border-4 border-white/40 flex items-center justify-center text-white shadow-2xl shadow-emerald-950/40 mb-6">
+              <CheckCircle2 className="w-14 h-14 sm:w-16 sm:h-16 text-white stroke-[2.5]" />
+            </div>
+
+            {/* Título grande */}
+            <h2 className="text-2xl sm:text-3xl font-black text-white tracking-wide uppercase">
+              ¡REGISTRO EXITOSO!
+            </h2>
+
+            {/* PLACA en grande */}
+            <div className="mt-4 px-7 py-3 rounded-2xl bg-black/25 border border-white/20 shadow-inner">
+              <span className="text-3xl sm:text-4xl font-black text-white tracking-widest font-mono">
+                {overlayData.plate}
+              </span>
+            </div>
+
+            {/* NOMBRE del inspector */}
+            <div className="mt-3.5 text-emerald-100 text-sm sm:text-base font-bold flex items-center justify-center gap-2">
+              <User size={18} className="text-emerald-300 shrink-0" />
+              <span>{overlayData.nombre}</span>
+            </div>
+
+            {/* Texto pequeño */}
+            <p className="mt-2 text-xs sm:text-sm text-emerald-100/80 font-medium">
+              Inventario diario enviado
+            </p>
+          </div>
+
+          {/* Botón grande abajo: NUEVO REGISTRO */}
+          <div className="w-full max-w-sm mx-auto pb-4 sm:pb-6">
+            <button
+              type="button"
+              onClick={closeOverlay}
+              className="w-full py-4 px-6 rounded-2xl bg-white text-[#096346] hover:bg-emerald-50 active:scale-[0.98] font-black text-sm sm:text-base uppercase tracking-wider shadow-2xl transition-all cursor-pointer flex items-center justify-center gap-2"
+            >
+              <ClipboardCheck size={20} className="shrink-0" />
+              <span>NUEVO REGISTRO</span>
+            </button>
+            <p className="text-[11px] text-center text-emerald-200/70 font-medium mt-2.5">
+              Se cerrará automáticamente en unos segundos
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        {/* Encabezado */}
+        <div className="p-5 sm:p-6 bg-[#0f172a] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800">
+          <div className="space-y-1">
+            <h2 className="text-lg sm:text-xl font-black uppercase tracking-tight flex items-center gap-2">
+              <ClipboardCheck size={22} className="text-[#0F9D6E]" /> Inventario Diario
+            </h2>
+            <p className="text-xs text-slate-400 font-medium">
+              Registro y verificación física del vehículo con soporte fotográfico
+            </p>
+          </div>
+
+          {/* Indicador de estado de la cola de sincronización */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {failedItems.length > 0 ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsRetryingAll(true);
+                  try {
+                    await retryAllFailed();
+                  } finally {
+                    setTimeout(() => setIsRetryingAll(false), 800);
+                  }
+                }}
+                disabled={isRetryingAll}
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-600 hover:bg-rose-500 active:scale-95 text-white text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
+              >
+                <AlertTriangle size={14} className="text-white shrink-0 animate-pulse" />
+                <span>
+                  ⚠ {failedItems.length} inventario{failedItems.length > 1 ? 's' : ''} sin enviar – Reintentar
+                </span>
+                <RefreshCw size={12} className={`shrink-0 ${isRetryingAll ? "animate-spin" : ""}`} />
+              </button>
+            ) : showPendingBadge && queueItems.length > 0 ? (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sky-500/15 border border-sky-500/30 text-sky-300 text-xs font-bold tracking-wide">
+                {isSyncing ? (
+                  <Loader2 size={14} className="animate-spin text-sky-400 shrink-0" />
+                ) : (
+                  <span className="text-sky-400 text-sm">☁</span>
+                )}
+                <span>☁ {queueItems.length} pendiente{queueItems.length > 1 ? 's' : ''} por enviar</span>
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold tracking-wide">
+                <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
+                <span>✓ Todo sincronizado</span>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Indicador de estado de la cola de sincronización */}
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {queueItems.length === 0 ? (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold tracking-wide">
-              <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
-              <span>✓ Todo sincronizado</span>
+        {/* Alerta de registros con fallos persistentes */}
+        {failedItems.length > 0 && (
+          <div className="p-4 mx-4 sm:mx-6 mt-4 sm:mt-6 bg-rose-50 border border-rose-200 rounded-2xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={18} className="text-rose-600 shrink-0" />
+                <h4 className="text-xs font-black uppercase text-rose-900 tracking-wide">
+                  Atención: {failedItems.length} registro(s) sin enviar
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsRetryingAll(true);
+                  try {
+                    await retryAllFailed();
+                  } finally {
+                    setTimeout(() => setIsRetryingAll(false), 800);
+                  }
+                }}
+                disabled={isRetryingAll}
+                className="text-xs font-black text-rose-700 hover:text-rose-900 underline cursor-pointer"
+              >
+                Reintentar todos
+              </button>
             </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              {failedItems.length > 0 ? (
-                <div className="flex items-center gap-2">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-bold animate-pulse">
-                    <AlertTriangle size={14} className="text-rose-400 shrink-0" />
-                    <span>{failedItems.length} con error al enviar</span>
+            <div className="space-y-2 pt-1">
+              {failedItems.map((fi) => (
+                <div key={fi.id} className="p-3 bg-white rounded-xl border border-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <div>
+                    <span className="font-black text-slate-900 mr-2">{fi.plate}</span>
+                    <span className="text-slate-500">{fi.fecha} • {fi.nombre} • {fi.retryCount} reintentos</span>
+                    {fi.lastError && (
+                      <p className="text-[11px] text-rose-600 font-medium mt-0.5">{fi.lastError}</p>
+                    )}
                   </div>
                   <button
                     type="button"
-                    onClick={async () => {
-                      setIsRetryingAll(true);
-                      try {
-                        await retryAllFailed();
-                      } finally {
-                        setTimeout(() => setIsRetryingAll(false), 800);
-                      }
-                    }}
-                    disabled={isRetryingAll}
-                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1 shadow-xs cursor-pointer disabled:opacity-50"
+                    onClick={() => retryQueueItem(fi.id)}
+                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold rounded-lg shrink-0 cursor-pointer text-xs self-start sm:self-auto"
                   >
-                    <RefreshCw size={12} className={isRetryingAll ? "animate-spin" : ""} />
-                    <span>Reintentar</span>
+                    Reintentar
                   </button>
                 </div>
-              ) : (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sky-500/15 border border-sky-500/30 text-sky-300 text-xs font-bold tracking-wide">
-                  {isSyncing ? (
-                    <Loader2 size={14} className="animate-spin text-sky-400 shrink-0" />
-                  ) : (
-                    <span className="text-sky-400 text-sm">☁</span>
-                  )}
-                  <span>☁ {queueItems.length} pendiente{queueItems.length > 1 ? 's' : ''} por enviar</span>
-                </div>
-              )}
+              ))}
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Alerta de registros con más de 5 fallos */}
-      {failedItems.length > 0 && (
-        <div className="p-4 mx-4 sm:mx-6 mt-4 sm:mt-6 bg-rose-50 border border-rose-200 rounded-2xl space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={18} className="text-rose-600 shrink-0" />
-              <h4 className="text-xs font-black uppercase text-rose-900 tracking-wide">
-                Atención: {failedItems.length} registro(s) han fallado más de 5 veces
-              </h4>
-            </div>
-            <button
-              type="button"
-              onClick={async () => {
-                setIsRetryingAll(true);
-                try {
-                  await retryAllFailed();
-                } finally {
-                  setTimeout(() => setIsRetryingAll(false), 800);
-                }
-              }}
-              disabled={isRetryingAll}
-              className="text-xs font-black text-rose-700 hover:text-rose-900 underline cursor-pointer"
-            >
-              Reintentar todos
-            </button>
           </div>
-          <div className="space-y-2 pt-1">
-            {failedItems.map((fi) => (
-              <div key={fi.id} className="p-3 bg-white rounded-xl border border-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                <div>
-                  <span className="font-black text-slate-900 mr-2">{fi.plate}</span>
-                  <span className="text-slate-500">{fi.fecha} • {fi.nombre} • {fi.retryCount} reintentos</span>
-                  {fi.lastError && (
-                    <p className="text-[11px] text-rose-600 font-medium mt-0.5">{fi.lastError}</p>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => retryQueueItem(fi.id)}
-                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold rounded-lg shrink-0 cursor-pointer text-xs self-start sm:self-auto"
-                >
-                  Reintentar
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Mensaje de Confirmación */}
-      {successMessage && (
-        <div className="p-4 mx-4 sm:mx-6 mt-4 sm:mt-6 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3">
-          <CheckCircle2 size={24} className="text-emerald-600 shrink-0 mt-0.5" />
-          <div className="space-y-1 flex-grow">
-            <h3 className="text-xs sm:text-sm font-black text-emerald-900 uppercase">¡Registro Exitoso!</h3>
-            <p className="text-xs text-emerald-700 font-medium">{successMessage}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setSuccessMessage(null)}
-            className="text-emerald-600 hover:text-emerald-800 text-xs font-bold cursor-pointer"
-          >
-            Cerrar
-          </button>
-        </div>
-      )}
+        )}
 
       {/* Alerta de Error */}
       {errorMessage && (
@@ -851,6 +949,7 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
         </div>
       </form>
     </div>
+    </>
   );
 };
 
