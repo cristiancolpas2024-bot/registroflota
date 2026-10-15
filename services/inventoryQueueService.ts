@@ -286,6 +286,8 @@ export const processQueue = async (): Promise<void> => {
           conos: item.conos,
           estriboIzq: driveLinks.estriboIzq || '',
           estriboDer: driveLinks.estriboDer || '',
+          estadoTacos: item.estadoTacos || '',
+          fotoTacos: item.fotoTacos || '',
           novedad1: driveLinks.novedad1 || '',
           novedad2: driveLinks.novedad2 || '',
           novedad3: driveLinks.novedad3 || '',

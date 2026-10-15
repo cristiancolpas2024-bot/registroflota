@@ -2442,6 +2442,8 @@ export const fetchNoveltyReportsFromSheet = async (): Promise<NoveltyReport[]> =
         estado: cleanSheetValue(r[10]) || 'ABIERTO',
         evidenciaCierre1: cleanSheetValue(r[11]),
         evidenciaCierre2: cleanSheetValue(r[12]),
+        estadoTacos: cleanSheetValue(r[16]),
+        fotoTacos: cleanSheetValue(r[17]),
       }));
 
   // 1. Intentar Apps Script

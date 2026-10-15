@@ -20,7 +20,8 @@ import {
   ImageIcon,
   RefreshCw,
   AlertTriangle,
-  Cloud
+  Cloud,
+  Shield
 } from 'lucide-react';
 
 interface VehicleInventoryFormProps {
@@ -97,12 +98,16 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
   const [estriboIzq, setEstriboIzq] = useState<string>('');
   const [estriboDer, setEstriboDer] = useState<string>('');
 
-  // 5. Fotos de Novedades (hasta 3 opcionales)
+  // 5. Tacos (SI / NO obligatorio y foto)
+  const [estadoTacos, setEstadoTacos] = useState<'SI' | 'NO' | ''>('');
+  const [fotoTacos, setFotoTacos] = useState<string>('');
+
+  // 6. Fotos de Novedades (hasta 3 opcionales)
   const [novedad1, setNovedad1] = useState<string>('');
   const [novedad2, setNovedad2] = useState<string>('');
   const [novedad3, setNovedad3] = useState<string>('');
 
-  // 6. Observación general (opcional)
+  // 7. Observación general (opcional)
   const [observacion, setObservacion] = useState<string>('');
 
   // Estado del formulario
@@ -198,6 +203,9 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
   const estriboDerCameraRef = useRef<HTMLInputElement>(null);
   const estriboDerGalleryRef = useRef<HTMLInputElement>(null);
 
+  const tacosCameraRef = useRef<HTMLInputElement>(null);
+  const tacosGalleryRef = useRef<HTMLInputElement>(null);
+
   const nov1CameraRef = useRef<HTMLInputElement>(null);
   const nov1GalleryRef = useRef<HTMLInputElement>(null);
 
@@ -253,6 +261,8 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
     setConos('');
     setEstriboIzq('');
     setEstriboDer('');
+    setEstadoTacos('');
+    setFotoTacos('');
     setNovedad1('');
     setNovedad2('');
     setNovedad3('');
@@ -326,6 +336,18 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
       return;
     }
 
+    // 5. Validación de Tacos (obligatorio elegir SI / NO)
+    if (!estadoTacos) {
+      setErrorMessage('Por favor responde a la pregunta de si el vehículo tiene tacos (SI / NO).');
+      return;
+    }
+
+    // Foto obligatoria si elige SI, opcional si elige NO
+    if (estadoTacos === 'SI' && !fotoTacos) {
+      setErrorMessage('La foto de los tacos es obligatoria cuando se selecciona que SI tiene tacos.');
+      return;
+    }
+
     // Desactivar botón de inmediato para evitar doble envío
     setIsSubmitting(true);
 
@@ -358,6 +380,8 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
         conos: numConos,
         estriboIzq,
         estriboDer,
+        estadoTacos,
+        fotoTacos: fotoTacos || '',
         novedad1: novedad1 || '',
         novedad2: novedad2 || '',
         novedad3: novedad3 || '',
@@ -889,11 +913,86 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
           </div>
         </div>
 
-        {/* SECCIÓN 5: FOTOS DE NOVEDAD (3 OPCIONALES) */}
+        {/* SECCIÓN 5: TACOS (DESPUÉS DE ESTRIBOS Y ANTES DE FOTOS DE NOVEDAD) */}
         <div className="space-y-3.5 bg-slate-50/80 p-4 sm:p-5 rounded-2xl border border-slate-200/80">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-2">
-              <AlertCircle size={16} className="text-amber-500" /> 5. Fotos de Novedades (Hasta 3 Opcionales)
+              <Shield size={16} className="text-indigo-600" /> 5. Tacos <span className="text-rose-500">*</span>
+            </h3>
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${
+              estadoTacos === 'SI' 
+                ? 'text-[#0F9D6E]' 
+                : estadoTacos === 'NO' 
+                  ? 'text-rose-600' 
+                  : 'text-slate-400'
+            }`}>
+              {estadoTacos ? `Seleccionado: ${estadoTacos}` : 'Obligatorio'}
+            </span>
+          </div>
+
+          {/* Pregunta: ¿Tiene tacos? con dos botones grandes SI / NO */}
+          <div className="space-y-2">
+            <label className="text-xs font-black text-slate-700 uppercase tracking-wide flex items-center justify-between">
+              <span>¿Tiene tacos? <span className="text-rose-500">*</span></span>
+              <span className="text-[10px] font-bold text-slate-400">Obligatorio elegir uno</span>
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                id="btn-tacos-si"
+                onClick={() => setEstadoTacos('SI')}
+                className={`py-4 px-4 rounded-xl sm:rounded-2xl text-base sm:text-lg font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer select-none active:scale-98 ${
+                  estadoTacos === 'SI'
+                    ? 'bg-[#0F9D6E] text-white border-2 border-[#0F9D6E] shadow-lg shadow-[#0F9D6E]/30 scale-[1.01]'
+                    : 'bg-white text-slate-700 border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <span>SI</span>
+              </button>
+              <button
+                type="button"
+                id="btn-tacos-no"
+                onClick={() => setEstadoTacos('NO')}
+                className={`py-4 px-4 rounded-xl sm:rounded-2xl text-base sm:text-lg font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer select-none active:scale-98 ${
+                  estadoTacos === 'NO'
+                    ? 'bg-rose-600 text-white border-2 border-rose-600 shadow-lg shadow-rose-600/30 scale-[1.01]'
+                    : 'bg-white text-slate-700 border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <span>NO</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Campo de foto: Foto de los tacos (obligatoria si elige SI, opcional si elige NO) */}
+          <div className="pt-1">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                Foto de los tacos:
+              </span>
+              <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                estadoTacos === 'SI' ? 'text-rose-600 font-extrabold' : 'text-slate-400'
+              }`}>
+                {estadoTacos === 'SI' ? 'Obligatoria (eligió SI)' : estadoTacos === 'NO' ? 'Opcional (eligió NO)' : 'Obligatoria si elige SI'}
+              </span>
+            </div>
+            {renderPhotoSlot(
+              'Foto de los tacos',
+              'fotoTacos',
+              fotoTacos,
+              setFotoTacos,
+              tacosCameraRef,
+              tacosGalleryRef,
+              estadoTacos === 'SI'
+            )}
+          </div>
+        </div>
+
+        {/* SECCIÓN 6: FOTOS DE NOVEDAD (3 OPCIONALES) */}
+        <div className="space-y-3.5 bg-slate-50/80 p-4 sm:p-5 rounded-2xl border border-slate-200/80">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-2">
+              <AlertCircle size={16} className="text-amber-500" /> 6. Fotos de Novedades (Hasta 3 Opcionales)
             </h3>
             <span className="text-[10px] font-bold text-slate-400 uppercase">Opcional</span>
           </div>
@@ -905,10 +1004,10 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
           </div>
         </div>
 
-        {/* SECCIÓN 6: OBSERVACIÓN GENERAL (OPCIONAL) */}
+        {/* SECCIÓN 7: OBSERVACIÓN GENERAL (OPCIONAL) */}
         <div className="space-y-2 bg-slate-50/80 p-4 sm:p-5 rounded-2xl border border-slate-200/80">
           <label className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-2">
-            <span>6. Observación</span>
+            <span>7. Observación</span>
             <span className="text-[10px] font-bold text-slate-400 uppercase">Opcional</span>
           </label>
           <textarea 
