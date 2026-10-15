@@ -23,6 +23,7 @@ import {
   Cloud,
   Shield
 } from 'lucide-react';
+import { procesarFoto } from '../utils';
 
 interface VehicleInventoryFormProps {
   vehicles: Vehicle[];
@@ -35,32 +36,6 @@ export const INSPECTORES_INVENTARIO = [
   'Leonardo Rodriguez',
   'David Reales'
 ] as const;
-
-// Compresor canvas: máx 1280px de lado mayor, calidad JPEG 0.7
-const comprimirFoto = (file: File): Promise<string> => new Promise((resolve, reject) => {
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    const img = new Image();
-    img.onload = () => {
-      const maxLado = 1280;
-      const scale = Math.min(1, maxLado / Math.max(img.width, img.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        resolve(ev.target?.result as string);
-        return;
-      }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', 0.7));
-    };
-    img.onerror = reject;
-    img.src = ev.target?.result as string;
-  };
-  reader.onerror = reject;
-  reader.readAsDataURL(file);
-});
 
 // Convierte 'YYYY-MM-DD' a 'dd/mm/yyyy'
 const formatToDDMMYYYY = (isoDate: string): string => {
@@ -215,6 +190,14 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
   const nov3CameraRef = useRef<HTMLInputElement>(null);
   const nov3GalleryRef = useRef<HTMLInputElement>(null);
 
+  // Rastreo de la placa al momento de tomar fotos (para avisar si se cambia después)
+  const [photosPlate, setPhotosPlate] = useState<string>('');
+
+  const hasPhotos = Boolean(
+    fotoFrontal || fotoLateralIzq || fotoLateralDer || fotoTrasera ||
+    estriboIzq || estriboDer || fotoTacos || novedad1 || novedad2 || novedad3
+  );
+
   // Lista filtrada de placas
   const filteredVehicles = useMemo(() => {
     let list = (vehicles || []).filter(v => v && v.plate);
@@ -225,7 +208,7 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
     return list.sort((a, b) => String(a.plate || '').localeCompare(String(b.plate || '')));
   }, [vehicles, plateSearch]);
 
-  // Manejo de captura / compresión de fotos
+  // Manejo de captura / compresión de fotos con marca de agua única
   const handlePhotoSelect = async (
     e: React.ChangeEvent<HTMLInputElement>,
     fieldKey: string,
@@ -237,10 +220,17 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
     setProcessingField(fieldKey);
     setErrorMessage(null);
     try {
-      const compressed = await comprimirFoto(file);
-      setter(compressed);
+      const processed = await procesarFoto(file, {
+        placa: plate,
+        modulo: 'INVENTARIO DIARIO',
+        usuario: nombre
+      });
+      setter(processed);
+      if (plate) {
+        setPhotosPlate(plate.toUpperCase().trim());
+      }
     } catch (err) {
-      console.error('Error al comprimir foto:', err);
+      console.error('Error al procesar foto:', err);
       setErrorMessage('No se pudo procesar la imagen seleccionada. Por favor intenta de nuevo.');
     } finally {
       setProcessingField(null);
@@ -252,6 +242,7 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
   const resetForm = () => {
     setPlate('');
     setPlateSearch('');
+    setPhotosPlate('');
     setNombre('');
     setFotoFrontal('');
     setFotoLateralIzq('');
@@ -797,6 +788,14 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
                   </option>
                 ))}
               </select>
+
+              {/* Aviso si el usuario cambia la placa después de tomar fotos */}
+              {hasPhotos && photosPlate && plate && plate.toUpperCase().trim() !== photosPlate.toUpperCase().trim() && (
+                <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-center gap-2.5 text-amber-900 text-xs font-bold mt-2 animate-pulse">
+                  <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                  <span>Cambiaste la placa: vuelve a tomar las fotos para que la marca sea correcta.</span>
+                </div>
+              )}
             </div>
 
             {/* NOMBRE: selector con solo las 3 opciones exactas */}

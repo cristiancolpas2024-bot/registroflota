@@ -102,74 +102,194 @@ export const isImageLink = (url: string): boolean => {
   return url.startsWith('data:image') || url.includes('drive.google.com') || /\.(jpeg|jpg|gif|png|webp|bmp)$/i.test(url);
 };
 
-export const processImageWithWatermark = (
-  base64Str: string, 
-  text: string, 
-  coords?: { lat: number, lng: number },
-  customDate?: string
+export interface ProcesarFotoOptions {
+  placa?: string;
+  modulo?: string;
+  usuario?: string;
+}
+
+/**
+ * Obtiene la fecha y hora actual en zona horaria de Colombia (formato dd/mm/yyyy hh:mm)
+ */
+export const getColombiaFormattedDate = (): string => {
+  const now = new Date();
+  try {
+    const parts = new Intl.DateTimeFormat('es-CO', {
+      timeZone: 'America/Bogota',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).formatToParts(now);
+
+    const get = (t: string) => parts.find(p => p.type === t)?.value || '';
+    const day = get('day');
+    const month = get('month');
+    const year = get('year');
+    const hour = get('hour');
+    const minute = get('minute');
+    if (day && month && year && hour && minute) {
+      return `${day}/${month}/${year} ${hour}:${minute}`;
+    }
+  } catch {
+    // Fallback manual si Intl falla
+  }
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+};
+
+/**
+ * Procesa UNA sola vez una foto tomada o subida en la app:
+ * 1. Redimensiona manteniendo proporción (máx 1280px en el lado mayor)
+ * 2. Dibuja marca de agua mini en esquina inferior derecha (margen 12px, franja negra 45%, 2 líneas)
+ * 3. Comprime a JPEG 0.7 y devuelve la cadena base64 DataURL
+ */
+export const procesarFoto = (
+  fileOrBase64: File | Blob | string,
+  options?: ProcesarFotoOptions
 ): Promise<string> => {
-  return new Promise((resolve) => {
-    if (!base64Str) return resolve("");
-    const img = new Image();
-    img.src = base64Str;
-    img.onload = () => {
+  return new Promise((resolve, reject) => {
+    if (!fileOrBase64) {
+      resolve('');
+      return;
+    }
+
+    const processLoadedImage = (img: HTMLImageElement, fallbackSrc: string) => {
       try {
-        const canvas = document.createElement('canvas');
-        const maxWidth = 2048; 
-        let width = img.width || 1280;
-        let height = img.height || 720;
-        if (width > maxWidth) {
-          height = (maxWidth / width) * height;
-          width = maxWidth;
+        const origW = img.naturalWidth || img.width;
+        const origH = img.naturalHeight || img.height;
+        if (!origW || !origH) {
+          resolve(fallbackSrc);
+          return;
         }
+
+        // 1. Redimensionar (máx 1280px en el lado mayor)
+        const maxDim = 1280;
+        const scale = Math.min(1, maxDim / Math.max(origW, origH));
+        const width = Math.max(1, Math.round(origW * scale));
+        const height = Math.max(1, Math.round(origH * scale));
+
+        const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
-        if (!ctx) return resolve(base64Str);
+        if (!ctx) {
+          resolve(fallbackSrc);
+          return;
+        }
+
+        // Dibujar imagen
         ctx.drawImage(img, 0, 0, width, height);
-        
-        const padding = width * 0.03;
-        const boxWidth = width * 0.55; 
-        const boxHeight = height * 0.22; 
-        const x = width - boxWidth - padding;
-        const y = height - boxHeight - padding;
-        
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-        ctx.fillRect(x, y, boxWidth, boxHeight);
-        
-        // Use custom date if provided, otherwise use current date
-        // We use T12:00:00 to avoid timezone shifts when parsing YYYY-MM-DD
-        let timestamp = "";
-        try {
-          const dateToUse = customDate ? new Date(customDate + "T12:00:00") : new Date();
-          timestamp = isNaN(dateToUse.getTime()) 
-            ? new Date().toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })
-            : dateToUse.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        } catch {
-          timestamp = new Date().toLocaleDateString('es-CO');
+
+        // 2. Construir textos de la marca de agua
+        // Línea 1: "BQA · [PLACA] · [MÓDULO]" (sin huecos vacíos)
+        const line1Parts: string[] = ['BQA'];
+        if (options?.placa && options.placa.trim()) {
+          line1Parts.push(options.placa.trim().toUpperCase());
         }
-        
-        const safeText = String(text || 'CALIBRACIÓN').toUpperCase();
+        if (options?.modulo && options.modulo.trim()) {
+          line1Parts.push(options.modulo.trim().toUpperCase());
+        }
+        const line1 = line1Parts.join(' · ');
+
+        // Línea 2: "dd/mm/yyyy hh:mm · [Nombre del usuario]" (sin huecos vacíos)
+        const fechaHora = getColombiaFormattedDate();
+        const line2Parts: string[] = [fechaHora];
+        if (options?.usuario && options.usuario.trim()) {
+          line2Parts.push(options.usuario.trim());
+        }
+        const line2 = line2Parts.join(' · ');
+
+        // Tamaño proporcional a la foto (~2.2% del ancho, mínimo 14px)
+        const fontSize = Math.max(14, Math.round(width * 0.022));
+        const lineHeight = Math.round(fontSize * 1.34);
+        ctx.font = `600 ${fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+
+        const m1 = ctx.measureText(line1);
+        const m2 = ctx.measureText(line2);
+        const maxTextW = Math.max(m1.width, m2.width);
+
+        const padX = Math.max(9, Math.round(fontSize * 0.65));
+        const padY = Math.max(6, Math.round(fontSize * 0.45));
+        const boxWidth = Math.round(maxTextW + (padX * 2));
+        const boxHeight = Math.round((lineHeight * 2) + (padY * 2));
+
+        // Margen de 12px en la esquina inferior derecha
+        const margin = 12;
+        const x = width - boxWidth - margin;
+        const y = height - boxHeight - margin;
+        const radius = Math.max(6, Math.round(fontSize * 0.35));
+
+        // Franja semitransparente (negro al 45% de opacidad) con bordes redondeados
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(x, y, boxWidth, boxHeight, radius);
+        } else {
+          ctx.moveTo(x + radius, y);
+          ctx.lineTo(x + boxWidth - radius, y);
+          ctx.quadraticCurveTo(x + boxWidth, y, x + boxWidth, y + radius);
+          ctx.lineTo(x + boxWidth, y + boxHeight - radius);
+          ctx.quadraticCurveTo(x + boxWidth, y + boxHeight, x + boxWidth - radius, y + boxHeight);
+          ctx.lineTo(x + radius, y + boxHeight);
+          ctx.quadraticCurveTo(x, y + boxHeight, x, y + boxHeight - radius);
+          ctx.lineTo(x, y + radius);
+          ctx.quadraticCurveTo(x, y, x + radius, y);
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        // Texto blanco con sombra suave
         ctx.fillStyle = '#ffffff';
-        ctx.font = `bold ${Math.round(width * 0.05)}px Inter, sans-serif`; 
-        ctx.fillText(safeText, x + 25, y + 50);
-        
-        ctx.font = `${Math.round(width * 0.035)}px Inter, sans-serif`; 
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.fillText(timestamp, x + 25, y + 100);
-        
-        if (coords && typeof coords.lat === 'number' && typeof coords.lng === 'number') {
-          ctx.fillStyle = '#818cf8';
-          ctx.fillText(`${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`, x + 25, y + 145);
-        }
-        resolve(canvas.toDataURL('image/jpeg', 0.95)); 
+        ctx.textBaseline = 'top';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
+        ctx.shadowBlur = 2;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 1;
+
+        ctx.fillText(line1, x + padX, y + padY);
+        ctx.fillText(line2, x + padX, y + padY + lineHeight);
+        ctx.restore();
+
+        // 3. Comprimir a JPEG 0.7
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
       } catch (err) {
-        console.warn("Watermark processing failed, using raw image:", err);
-        resolve(base64Str);
+        console.warn('Error al procesar foto con marca de agua:', err);
+        resolve(fallbackSrc);
       }
     };
-    img.onerror = () => resolve(base64Str);
+
+    if (typeof fileOrBase64 === 'string') {
+      const img = new Image();
+      img.onload = () => processLoadedImage(img, fileOrBase64);
+      img.onerror = () => resolve(fileOrBase64);
+      img.src = fileOrBase64;
+    } else {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const src = (ev.target?.result as string) || '';
+        const img = new Image();
+        img.onload = () => processLoadedImage(img, src);
+        img.onerror = () => resolve(src);
+        img.src = src;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(fileOrBase64);
+    }
   });
+};
+
+// Mantiene compatibilidad con módulos existentes canalizando hacia procesarFoto
+export const processImageWithWatermark = (
+  base64Str: string, 
+  text: string, 
+  _coords?: { lat: number, lng: number },
+  _customDate?: string
+): Promise<string> => {
+  return procesarFoto(base64Str, { placa: text });
 };
 
 export const compressImage = (base64Str: string, maxWidth = 1920): Promise<string> => {

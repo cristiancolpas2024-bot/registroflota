@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useMemo } from 'react';
 import { Vehicle } from '../types';
-import { processImageWithWatermark, compressImage, normalizeStr, normalizePlate, getWeekNumber, createMosaic } from '../utils';
-import { X, Droplets, Camera, Save, Plus, Trash2, Loader2, Sparkles, MapPin, Building2, Image as ImageIcon, Calendar } from 'lucide-react';
+import { processImageWithWatermark, compressImage, normalizeStr, normalizePlate, getWeekNumber, createMosaic, procesarFoto } from '../utils';
+import { X, Droplets, Camera, Save, Plus, Trash2, Loader2, Sparkles, MapPin, Building2, Image as ImageIcon, Calendar, AlertTriangle } from 'lucide-react';
 
 interface WashFormProps {
   vehicles: Vehicle[];
@@ -23,6 +23,7 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit, isInli
   const [filterCd, setFilterCd] = useState<string>('all');
   const [plateSearch, setPlateSearch] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
+  const [photosPlate, setPhotosPlate] = useState<string>('');
   
   const [formData, setFormData] = useState({
     plate: '',

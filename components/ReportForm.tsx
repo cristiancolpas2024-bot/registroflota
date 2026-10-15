@@ -1,8 +1,8 @@
 
 import React, { useState, useRef } from 'react';
 import { Report, Vehicle } from '../types';
-import { compressImage, createMosaic, processImageWithWatermark } from '../utils';
-import { X, ClipboardList, Camera, CheckCircle, MapPin, Plus, Trash2, Image as ImageIcon, Loader2, Calendar, Wrench } from 'lucide-react';
+import { createMosaic, procesarFoto } from '../utils';
+import { X, ClipboardList, Camera, CheckCircle, MapPin, Plus, Trash2, Image as ImageIcon, Loader2, Calendar, Wrench, AlertTriangle } from 'lucide-react';
 
 interface ReportFormProps {
   onClose: () => void;
@@ -18,6 +18,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
   const evidenceInputRef = useRef<HTMLInputElement>(null);
   
   const [capturedPhotos, setCapturedPhotos] = useState<string[]>([]);
+  const [photosPlate, setPhotosPlate] = useState<string>('');
   const [plateSearch, setPlateSearch] = useState('');
   const [formData, setFormData] = useState({
     id: `OT-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -93,32 +94,21 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
     if (files.length === 0) return;
 
     setIsProcessingPhoto(true);
-    
-    const getCoords = (): Promise<{lat: number, lng: number} | undefined> => {
-      return new Promise((resolve) => {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-          () => resolve(undefined),
-          { timeout: 5000 }
-        );
-      });
-    };
-
-    const coords = await getCoords();
 
     for (const file of files) {
       if (capturedPhotos.length >= 4) break;
-      
-      const watermarked = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          const res = await processImageWithWatermark(reader.result as string, `PLACA: ${formData.plate}`, coords, formData.date);
-          resolve(res);
-        };
-        reader.readAsDataURL(file);
-      });
-      
-      setCapturedPhotos(prev => [...prev, watermarked].slice(0, 4));
+      try {
+        const watermarked = await procesarFoto(file, {
+          placa: formData.plate,
+          modulo: 'NOVEDADES'
+        });
+        setCapturedPhotos(prev => [...prev, watermarked].slice(0, 4));
+        if (formData.plate) {
+          setPhotosPlate(formData.plate.toUpperCase().trim());
+        }
+      } catch (err) {
+        console.error("Error procesando foto:", err);
+      }
     }
     
     setIsProcessingPhoto(false);
@@ -132,33 +122,22 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
     }
 
     setIsProcessingPhoto(true);
-    
-    const getCoords = (): Promise<{lat: number, lng: number} | undefined> => {
-      return new Promise((resolve) => {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-          () => resolve(undefined),
-          { timeout: 5000 }
-        );
-      });
-    };
-
-    const coords = await getCoords();
 
     for (let i = 0; i < files.length; i++) {
       if (capturedPhotos.length + i >= 4) break;
       const file = files[i];
-      
-      const watermarked = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          const res = await processImageWithWatermark(reader.result as string, `PLACA: ${formData.plate}`, coords, formData.date);
-          resolve(res);
-        };
-        reader.readAsDataURL(file);
-      });
-      
-      setCapturedPhotos(prev => [...prev, watermarked].slice(0, 4));
+      try {
+        const watermarked = await procesarFoto(file, {
+          placa: formData.plate,
+          modulo: 'NOVEDADES'
+        });
+        setCapturedPhotos(prev => [...prev, watermarked].slice(0, 4));
+        if (formData.plate) {
+          setPhotosPlate(formData.plate.toUpperCase().trim());
+        }
+      } catch (err) {
+        console.error("Error procesando foto:", err);
+      }
     }
     
     setIsProcessingPhoto(false);
@@ -248,6 +227,14 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
               <option value="">-- {filteredVehicles.length === 0 ? 'SIN RESULTADOS' : 'SELECCIONE'} --</option>
               {filteredVehicles.map(v => <option key={v.id} value={v.plate}>{v.plate}</option>)}
             </select>
+
+            {/* Aviso si el usuario cambia la placa después de tomar fotos */}
+            {capturedPhotos.length > 0 && photosPlate && formData.plate && formData.plate.toUpperCase().trim() !== photosPlate && (
+              <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-center gap-2.5 text-amber-900 text-xs font-bold mt-2 animate-pulse">
+                <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                <span>Cambiaste la placa: vuelve a tomar las fotos para que la marca sea correcta.</span>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { SparePartRecord } from '../types';
 import { fetchSparePartsFromSheet, submitSparePartInspection } from '../services/sheetService';
+import { procesarFoto } from '../utils';
 
 export const SPARE_PARTS_PROVIDERS = ['Renting Colombia', 'Navitrans', 'ALD'];
 export const SPARE_PARTS_WORKSHOPS = ['ELECTRONIC', 'COUNTRY TRUCKS', 'VEHIPESA', 'TODOFIBRA'];
@@ -171,47 +172,23 @@ export const SparePartsModule: React.FC = () => {
     });
   };
 
-  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsProcessingPhoto(true);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_DIMENSION = 1000;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_DIMENSION) {
-            height = Math.round((height * MAX_DIMENSION) / width);
-            width = MAX_DIMENSION;
-          }
-        } else {
-          if (height > MAX_DIMENSION) {
-            width = Math.round((width * MAX_DIMENSION) / height);
-            height = MAX_DIMENSION;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
-          setEvidencePhoto(compressedBase64);
-        }
-        setIsProcessingPhoto(false);
-      };
-      img.onerror = () => setIsProcessingPhoto(false);
-      img.src = event.target?.result as string;
-    };
-    reader.onerror = () => setIsProcessingPhoto(false);
-    reader.readAsDataURL(file);
+    try {
+      const processed = await procesarFoto(file, {
+        modulo: 'REPUESTOS',
+        usuario: inspector
+      });
+      setEvidencePhoto(processed);
+    } catch (err) {
+      console.error('Error procesando foto de repuestos:', err);
+    } finally {
+      setIsProcessingPhoto(false);
+      if (e.target) e.target.value = '';
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

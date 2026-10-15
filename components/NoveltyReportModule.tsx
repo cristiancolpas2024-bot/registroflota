@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { Vehicle, NoveltyReport, NoveltyReportPayload } from '../types';
 import { submitNoveltyReport, submitNoveltyClose, fetchNoveltyReportsFromSheet } from '../services/sheetService';
+import { procesarFoto } from '../utils';
 
 export const NOVELTY_WORKSHOPS = [
   'ELECTRONIC',
@@ -62,45 +63,8 @@ export const CC_NOVIDADES = "aperez@rentingcolombia.com,edgar.arrieta@ab-inbev.c
 // UTILIDADES DE COLLAGE Y COMPRESIÓN
 // ==========================================
 
-const compressSingleImage = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_DIM = 1000;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_DIM) {
-            height *= MAX_DIM / width;
-            width = MAX_DIM;
-          }
-        } else {
-          if (height > MAX_DIM) {
-            width *= MAX_DIM / height;
-            height = MAX_DIM;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.8));
-        } else {
-          resolve(e.target?.result as string);
-        }
-      };
-      img.onerror = () => reject(new Error('Error al leer la imagen'));
-      img.src = e.target?.result as string;
-    };
-    reader.onerror = () => reject(new Error('Error al cargar archivo'));
-    reader.readAsDataURL(file);
-  });
+const compressSingleImage = (file: File, placa?: string): Promise<string> => {
+  return procesarFoto(file, { placa, modulo: 'NOVEDADES' });
 };
 
 /**
@@ -253,14 +217,13 @@ export const buildCollageFromImages = (images: string[]): Promise<string> => {
 
 interface EvidenceCollageUploaderProps {
   label: string;
-  slotNumber?: number | string | React.ReactNode;
+  slotNumber: number;
   photos: string[];
   collage: string;
   onChange: (photos: string[], collage: string) => void;
   onViewImage: (url: string, title: string) => void;
   disabled?: boolean;
-  maxPhotos?: number;
-  helperText?: string;
+  placa?: string;
 }
 
 const EvidenceCollageUploader: React.FC<EvidenceCollageUploaderProps> = ({
@@ -271,8 +234,7 @@ const EvidenceCollageUploader: React.FC<EvidenceCollageUploaderProps> = ({
   onChange,
   onViewImage,
   disabled = false,
-  maxPhotos = 4,
-  helperText,
+  placa,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -283,14 +245,14 @@ const EvidenceCollageUploader: React.FC<EvidenceCollageUploaderProps> = ({
 
     setIsProcessing(true);
     try {
-      const remainingSlots = maxPhotos - photos.length;
+      const remainingSlots = 4 - photos.length;
       const filesToProcess = files.slice(0, remainingSlots);
 
       const newBase64s = await Promise.all(
-        filesToProcess.map((f: File) => compressSingleImage(f))
+        filesToProcess.map((f: File) => compressSingleImage(f, placa))
       );
 
-      const updatedPhotos = [...photos, ...newBase64s].slice(0, maxPhotos);
+      const updatedPhotos = [...photos, ...newBase64s].slice(0, 4);
       const newCollage = await buildCollageFromImages(updatedPhotos);
       onChange(updatedPhotos, newCollage);
     } catch (err) {
@@ -319,18 +281,16 @@ const EvidenceCollageUploader: React.FC<EvidenceCollageUploaderProps> = ({
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const isFull = photos.length >= maxPhotos;
+  const isFull = photos.length >= 4;
 
   return (
     <div className="border-2 border-slate-200 hover:border-indigo-300 rounded-3xl p-4 bg-slate-50/60 transition-all flex flex-col justify-between min-h-[220px]">
       {/* Cabecera del Slot */}
       <div className="flex items-center justify-between pb-2.5 border-b border-slate-200/80 mb-3">
         <div className="flex items-center gap-2">
-          {slotNumber !== undefined && (
-            <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-black shrink-0">
-              {slotNumber}
-            </div>
-          )}
+          <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-black">
+            {slotNumber}
+          </div>
           <span className="text-xs font-black text-slate-800 uppercase tracking-tight">
             {label}
           </span>
@@ -344,7 +304,7 @@ const EvidenceCollageUploader: React.FC<EvidenceCollageUploaderProps> = ({
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
                 : 'bg-indigo-50 text-indigo-700 border-indigo-200'
           }`}>
-            {photos.length}/{maxPhotos} {maxPhotos === 1 ? 'foto' : 'fotos'} {isFull ? '(Listo)' : ''}
+            {photos.length}/4 fotos {isFull ? '(Máx)' : ''}
           </span>
 
           {photos.length > 0 && (
@@ -383,10 +343,10 @@ const EvidenceCollageUploader: React.FC<EvidenceCollageUploaderProps> = ({
           </div>
 
           <p className="text-xs font-black text-slate-800 uppercase tracking-tight">
-            {maxPhotos === 1 ? 'Toca para tomar o subir foto' : 'Toca para subir fotos'}
+            Toca para subir fotos
           </p>
           <p className="text-[10px] text-slate-400 mt-0.5">
-            {helperText || `Puedes seleccionar hasta ${maxPhotos} fotos (crea collage automático)`}
+            Puedes seleccionar hasta 4 fotos (crea collage automático)
           </p>
         </div>
       ) : (
@@ -411,7 +371,7 @@ const EvidenceCollageUploader: React.FC<EvidenceCollageUploaderProps> = ({
 
             <input
               type="file"
-              multiple={maxPhotos > 1}
+              multiple
               accept="image/*"
               capture="environment"
               ref={fileInputRef}
@@ -420,7 +380,7 @@ const EvidenceCollageUploader: React.FC<EvidenceCollageUploaderProps> = ({
               className="hidden"
             />
 
-            <div className={`grid ${maxPhotos === 1 ? 'grid-cols-1 max-w-[120px]' : 'grid-cols-4'} gap-2`}>
+            <div className="grid grid-cols-4 gap-2">
               {photos.map((photo, pIdx) => (
                 <div key={pIdx} className="relative group rounded-xl overflow-hidden border border-slate-200 bg-black aspect-square shadow-xs">
                   <img
@@ -524,11 +484,6 @@ export default function NoveltyReportModule({
   const [evidencia2Photos, setEvidencia2Photos] = useState<string[]>([]);
   const [evidencia2, setEvidencia2] = useState<string>('');
 
-  // Sección Tacos
-  const [estadoTacos, setEstadoTacos] = useState<'SI' | 'NO' | null>(null);
-  const [tacosPhotos, setTacosPhotos] = useState<string[]>([]);
-  const [fotoTacos, setFotoTacos] = useState<string>('');
-
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
@@ -630,14 +585,6 @@ export default function NoveltyReportModule({
       setErrorMessage('Por favor seleccione el taller asignado.');
       return;
     }
-    if (!estadoTacos) {
-      setErrorMessage('Por favor indique si el vehículo tiene tacos (seleccione SI o NO).');
-      return;
-    }
-    if (estadoTacos === 'SI' && (!fotoTacos || !fotoTacos.trim())) {
-      setErrorMessage('La foto de los tacos es obligatoria cuando se selecciona que SÍ tiene tacos.');
-      return;
-    }
 
     setIsSubmitting(true);
     try {
@@ -651,8 +598,6 @@ export default function NoveltyReportModule({
         taller: taller.trim().toUpperCase(),
         evidencia1: evidencia1 || undefined,
         evidencia2: evidencia2 || undefined,
-        estadoTacos: estadoTacos,
-        fotoTacos: fotoTacos || '',
       };
 
       const success = await submitNoveltyReport(payload);
@@ -666,9 +611,6 @@ export default function NoveltyReportModule({
         setContratista('');
         setConductor('');
         setNovedad('');
-        setEstadoTacos(null);
-        setTacosPhotos([]);
-        setFotoTacos('');
         setEvidencia1Photos([]);
         setEvidencia1('');
         setEvidencia2Photos([]);
@@ -736,8 +678,6 @@ export default function NoveltyReportModule({
       'Taller', 
       'Evidencia 1', 
       'Evidencia 2', 
-      'Estado Tacos',
-      'Foto Tacos',
       'Estado', 
       'Evidencia Cierre 1', 
       'Evidencia Cierre 2'
@@ -754,8 +694,6 @@ export default function NoveltyReportModule({
       `"${r.taller || ''}"`,
       `"${(r.evidenciaReporte1 || '').replace(/"/g, '""')}"`,
       `"${(r.evidenciaReporte2 || '').replace(/"/g, '""')}"`,
-      `"${r.estadoTacos || ''}"`,
-      `"${(r.fotoTacos || '').replace(/"/g, '""')}"`,
       `"${r.estado || ''}"`,
       `"${(r.evidenciaCierre1 || '').replace(/"/g, '""')}"`,
       `"${(r.evidenciaCierre2 || '').replace(/"/g, '""')}"`
@@ -1193,108 +1131,6 @@ function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conducto
                 />
               </div>
 
-              {/* SECCIÓN TACOS (después del campo de novedad y antes de las evidencias) */}
-              <div className="p-5 md:p-6 bg-slate-50 border-2 border-slate-200 rounded-3xl space-y-5 shadow-xs">
-                {/* Cabecera Sección Tacos */}
-                <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
-                      <ShieldCheck size={18} />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">
-                        Sección Tacos
-                      </h3>
-                      <p className="text-[11px] text-slate-500 font-medium">
-                        Verificación y control obligatorio de tacos
-                      </p>
-                    </div>
-                  </div>
-
-                  {estadoTacos && (
-                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border flex items-center gap-1.5 ${
-                      estadoTacos === 'SI'
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                        : 'bg-rose-50 text-rose-700 border-rose-300'
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${estadoTacos === 'SI' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                      {estadoTacos === 'SI' ? 'TIENE TACOS (SÍ)' : 'NO TIENE TACOS (NO)'}
-                    </span>
-                  )}
-                </div>
-
-                {/* Pregunta: ¿Tiene tacos? con dos botones grandes tipo selector */}
-                <div>
-                  <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-2.5 flex items-center justify-between">
-                    <span>¿Tiene tacos? *</span>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">
-                      Obligatorio elegir uno
-                    </span>
-                  </label>
-
-                  <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                    {/* Botón SI: Verde al seleccionar */}
-                    <button
-                      type="button"
-                      onClick={() => setEstadoTacos('SI')}
-                      className={`py-3.5 sm:py-4 px-4 sm:px-6 rounded-2xl font-black text-base sm:text-lg uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all cursor-pointer select-none active:scale-[0.98] ${
-                        estadoTacos === 'SI'
-                          ? 'bg-emerald-600 text-white border-2 border-emerald-600 shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-500 ring-offset-2'
-                          : 'bg-white text-slate-700 border-2 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40 hover:text-emerald-800'
-                      }`}
-                    >
-                      <Check size={22} className={estadoTacos === 'SI' ? 'stroke-[3]' : 'text-slate-400'} />
-                      <span>SÍ</span>
-                    </button>
-
-                    {/* Botón NO: Rojo al seleccionar */}
-                    <button
-                      type="button"
-                      onClick={() => setEstadoTacos('NO')}
-                      className={`py-3.5 sm:py-4 px-4 sm:px-6 rounded-2xl font-black text-base sm:text-lg uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all cursor-pointer select-none active:scale-[0.98] ${
-                        estadoTacos === 'NO'
-                          ? 'bg-rose-600 text-white border-2 border-rose-600 shadow-lg shadow-rose-600/30 ring-2 ring-rose-500 ring-offset-2'
-                          : 'bg-white text-slate-700 border-2 border-slate-200 hover:border-rose-300 hover:bg-rose-50/40 hover:text-rose-800'
-                      }`}
-                    >
-                      <X size={22} className={estadoTacos === 'NO' ? 'stroke-[3]' : 'text-slate-400'} />
-                      <span>NO</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Debajo: Foto de los tacos */}
-                <div className="pt-1">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                      <Camera size={14} className="text-indigo-600" /> Foto de los tacos {estadoTacos === 'SI' ? '*' : '(Opcional)'}
-                    </span>
-                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
-                      estadoTacos === 'SI'
-                        ? (fotoTacos ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200')
-                        : 'bg-slate-100 text-slate-500 border-slate-200'
-                    }`}>
-                      {estadoTacos === 'SI' ? (fotoTacos ? '✓ Foto lista' : 'Obligatoria al seleccionar SÍ') : 'Opcional con NO'}
-                    </span>
-                  </div>
-
-                  <EvidenceCollageUploader
-                    label="Foto de los tacos"
-                    slotNumber={<ShieldCheck size={14} />}
-                    photos={tacosPhotos}
-                    collage={fotoTacos}
-                    maxPhotos={1}
-                    helperText={estadoTacos === 'SI' ? 'Toma la foto clara de los tacos (Obligatoria)' : 'Toma la foto de los tacos (Opcional)'}
-                    onChange={(photos, collage) => {
-                      setTacosPhotos(photos);
-                      setFotoTacos(collage);
-                    }}
-                    onViewImage={(url, title) => setViewingImage({ url, title })}
-                    disabled={isSubmitting}
-                  />
-                </div>
-              </div>
-
               {/* Fila 6: Evidencias Fotográficas con Soporte Collage (hasta 4 fotos por slot) */}
               <div className="space-y-3">
                 <label className="block text-xs font-black text-slate-700 uppercase tracking-wider flex items-center justify-between">
@@ -1313,6 +1149,7 @@ function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conducto
                     slotNumber={1}
                     photos={evidencia1Photos}
                     collage={evidencia1}
+                    placa={formData.plate}
                     onChange={(photos, collage) => {
                       setEvidencia1Photos(photos);
                       setEvidencia1(collage);
@@ -1327,6 +1164,7 @@ function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conducto
                     slotNumber={2}
                     photos={evidencia2Photos}
                     collage={evidencia2}
+                    placa={formData.plate}
                     onChange={(photos, collage) => {
                       setEvidencia2Photos(photos);
                       setEvidencia2(collage);
@@ -1481,7 +1319,6 @@ function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conducto
                       <th className="p-4">CD / Contratista</th>
                       <th className="p-4">Taller</th>
                       <th className="p-4">Novedad / Falla</th>
-                      <th className="p-4">Tacos</th>
                       <th className="p-4">Evidencias</th>
                       <th className="p-4">Estado</th>
                       <th className="p-4 text-right">Acción</th>
@@ -1519,53 +1356,6 @@ function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conducto
                           {item.conductor && (
                             <span className="text-[10px] text-slate-400 italic block mt-0.5">Cond: {item.conductor}</span>
                           )}
-                        </td>
-                        {/* Estado Tacos (Columna Q) y Foto Tacos (Columna R) */}
-                        <td className="p-4 whitespace-nowrap">
-                          <div className="flex flex-col gap-1 items-start">
-                            {item.estadoTacos ? (
-                              <span 
-                                className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider inline-flex items-center gap-1 border ${
-                                  item.estadoTacos.toUpperCase() === 'SI'
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                    : 'bg-rose-50 text-rose-700 border-rose-200'
-                                }`}
-                              >
-                                <span 
-                                  className={`w-1.5 h-1.5 rounded-full ${
-                                    item.estadoTacos.toUpperCase() === 'SI' ? 'bg-emerald-500' : 'bg-rose-500'
-                                  }`} 
-                                />
-                                {item.estadoTacos.toUpperCase() === 'SI' ? 'SÍ' : 'NO'}
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-slate-400 italic">—</span>
-                            )}
-
-                            {item.fotoTacos && (
-                              <div className="flex items-center gap-1 mt-0.5">
-                                <button
-                                  type="button"
-                                  onClick={() => setViewingImage({ url: item.fotoTacos!, title: `${item.ot || item.plate} - Foto de los Tacos` })}
-                                  className="inline-flex items-center gap-1 text-[9px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 px-1.5 py-0.5 rounded transition-colors"
-                                  title="Ver Foto de los Tacos"
-                                >
-                                  📷 Foto
-                                </button>
-                                {item.fotoTacos.startsWith('http') && (
-                                  <a
-                                    href={item.fotoTacos}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-slate-400 hover:text-indigo-600 p-0.5 rounded"
-                                    title="Abrir enlace de Drive"
-                                  >
-                                    <ExternalLink size={10} />
-                                  </a>
-                                )}
-                              </div>
-                            )}
-                          </div>
                         </td>
                         <td className="p-4">
                           <div className="flex items-center gap-1.5">
@@ -1740,27 +1530,6 @@ function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conducto
             <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
               <p><span className="font-bold text-slate-700">Falla Reportada:</span> {closingRecord.novedad}</p>
               <p><span className="font-bold text-slate-700">Taller:</span> {closingRecord.taller}</p>
-              {closingRecord.estadoTacos && (
-                <div className="flex items-center gap-2 pt-1 border-t border-slate-200/60 mt-1">
-                  <span className="font-bold text-slate-700">Estado Tacos:</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                    closingRecord.estadoTacos.toUpperCase() === 'SI'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-rose-100 text-rose-800'
-                  }`}>
-                    {closingRecord.estadoTacos.toUpperCase() === 'SI' ? 'TIENE TACOS (SÍ)' : 'NO TIENE TACOS (NO)'}
-                  </span>
-                  {closingRecord.fotoTacos && (
-                    <button
-                      type="button"
-                      onClick={() => setViewingImage({ url: closingRecord.fotoTacos!, title: `${closingRecord.ot || closingRecord.plate} - Foto de los Tacos` })}
-                      className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-0.5"
-                    >
-                      📷 Ver Foto
-                    </button>
-                  )}
-                </div>
-              )}
             </div>
 
             {closeSuccess ? (
@@ -1780,6 +1549,7 @@ function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conducto
                     slotNumber={1}
                     photos={cierre1Photos}
                     collage={cierreEvidencia1}
+                    placa={closingRecord.plate}
                     onChange={(photos, collage) => {
                       setCierre1Photos(photos);
                       setCierreEvidencia1(collage);
@@ -1794,6 +1564,7 @@ function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conducto
                     slotNumber={2}
                     photos={cierre2Photos}
                     collage={cierreEvidencia2}
+                    placa={closingRecord.plate}
                     onChange={(photos, collage) => {
                       setCierre2Photos(photos);
                       setCierreEvidencia2(collage);
