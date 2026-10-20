@@ -416,7 +416,7 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({ fuelData 
                     data={stats.contractorChartData}
                     onClick={(data) => {
                       if (data && data.activeLabel) {
-                        setSelectedContractor(data.activeLabel);
+                        setSelectedContractor(String(data.activeLabel));
                         setCurrentPage(1);
                       }
                     }}
@@ -452,7 +452,7 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({ fuelData 
                     data={stats.weeklyCdChartData}
                     onClick={(data) => {
                       if (data && data.activeLabel) {
-                        setSelectedWeek(data.activeLabel);
+                        setSelectedWeek(String(data.activeLabel));
                         setCurrentPage(1);
                       }
                     }}
@@ -490,7 +490,7 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({ fuelData 
                     data={stats.monthlyCdChartData}
                     onClick={(data) => {
                       if (data && data.activeLabel) {
-                        setSelectedMonth(data.activeLabel);
+                        setSelectedMonth(String(data.activeLabel));
                         setCurrentPage(1);
                       }
                     }}

@@ -221,7 +221,7 @@ const App: React.FC = () => {
 
   // UI States
   const [viewDoc, setViewDoc] = useState<{ url: string | string[] | {url: string, label?: string}[], title: string } | null>(null);
-  const [fineStatusFilter, setFineStatusFilter] = useState<'all' | 'PENDIENTE' | 'PAGADO'>('all');
+  const [fineStatusFilter, setFineStatusFilter] = useState<'all' | 'PENDIENTE' | 'PAGADO' | 'WITH_EVIDENCE' | 'WITHOUT_EVIDENCE'>('all');
   const [showFineForm, setShowFineForm] = useState(false);
   const [managingFineSupport, setManagingFineSupport] = useState<Fine | null>(null);
   const [showReportForm, setShowReportForm] = useState(false);
@@ -291,7 +291,7 @@ const App: React.FC = () => {
     
     // We will fetch all data sources in parallel. Each data source updates
     // its state and stores its results in the offline cache immediately upon receipt.
-    const tasks = [
+    const tasks: Array<{ fn: () => Promise<any>; set: (data: any) => void; key: string }> = [
       { fn: fetchVehiclesFromSheet, set: setVehicles, key: 'vehicles' },
       { fn: fetchDriversFromSheet, set: setDrivers, key: 'drivers' },
       { fn: fetchMileageLogsFromSheet, set: setMileageLogs, key: 'mileageLogs' },

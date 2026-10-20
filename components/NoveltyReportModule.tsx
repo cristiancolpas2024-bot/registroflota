@@ -1149,7 +1149,7 @@ function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conducto
                     slotNumber={1}
                     photos={evidencia1Photos}
                     collage={evidencia1}
-                    placa={formData.plate}
+                    placa={plate}
                     onChange={(photos, collage) => {
                       setEvidencia1Photos(photos);
                       setEvidencia1(collage);
@@ -1164,7 +1164,7 @@ function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conducto
                     slotNumber={2}
                     photos={evidencia2Photos}
                     collage={evidencia2}
-                    placa={formData.plate}
+                    placa={plate}
                     onChange={(photos, collage) => {
                       setEvidencia2Photos(photos);
                       setEvidencia2(collage);

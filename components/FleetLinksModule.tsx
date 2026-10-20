@@ -104,7 +104,7 @@ const FleetLinksModule: React.FC = () => {
             className="group relative w-full bg-[#0f172a] hover:bg-[#1e293b] p-4 md:p-5 rounded-xl shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 flex items-center justify-center text-center overflow-hidden border border-white/10 hover:border-indigo-500"
           >
             <div className="absolute left-4 md:left-6 text-indigo-400 group-hover:text-white group-hover:scale-125 transition-all duration-500">
-              {React.cloneElement(link.icon as React.ReactElement, { size: 18 })}
+              {React.cloneElement(link.icon as React.ReactElement<any>, { size: 18 })}
             </div>
             
             <h3 className="text-[11px] md:text-sm font-black text-white uppercase tracking-widest relative z-10 px-8">

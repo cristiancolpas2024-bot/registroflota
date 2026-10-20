@@ -487,6 +487,8 @@ export interface NoveltyReport {
   estado: string;        // ABIERTO / CERRADO
   evidenciaCierre1: string;
   evidenciaCierre2: string;
+  estadoTacos?: string;
+  fotoTacos?: string;
 }
 
 export type NoveltyReportRecord = NoveltyReport;
@@ -507,7 +509,7 @@ export interface VehicleInventoryPayload {
   id?: string; // ID único para deduplicación: fecha + placa + timestamp
   fecha: string; // Formato dd/mm/yyyy
   plate: string;
-  nombre: 'Edwion Correa' | 'Edwin Correa' | 'Leonardo Rodriguez' | 'David Reales' | string;
+  nombre: 'Edwin Correa' | 'Edwin Correa' | 'Leonardo Rodriguez' | 'David Reales' | string;
   fotoFrontal: string;
   fotoLateralIzq: string;
   fotoLateralDer: string;
