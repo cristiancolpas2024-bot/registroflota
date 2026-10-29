@@ -509,7 +509,7 @@ export interface VehicleInventoryPayload {
   id?: string; // ID único para deduplicación: fecha + placa + timestamp
   fecha: string; // Formato dd/mm/yyyy
   plate: string;
-  nombre: 'Edwin Correa' | 'Edwin Correa' | 'Leonardo Rodriguez' | 'David Reales' | string;
+  nombre: 'Edwin Correa' | 'Leonardo Rodriguez' | 'David Reales' | 'Jorge Chacon' | 'Jorge Fandiño' | 'Israel Guerrero' | string;
   fotoFrontal: string;
   fotoLateralIzq: string;
   fotoLateralDer: string;

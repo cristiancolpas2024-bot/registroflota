@@ -758,7 +758,7 @@ function doPost(e) {
         s.appendRow([
           fecha,            // 0: FECHA (dd/mm/yyyy)
           placa,            // 1: PLACA
-          nombre,           // 2: NOMBRE (Edwion Correa, Leonardo Rodriguez, David Reales)
+          nombre,           // 2: NOMBRE (Edwin Correa, Leonardo Rodriguez, David Reales, Jorge Chacon, Jorge Fandiño, Israel Guerrero)
           urlFrontal,       // 3: Foto Frontal
           urlLatIzq,        // 4: Foto Lateral Izq.
           urlLatDer,        // 5: Foto Lateral Der.

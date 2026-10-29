@@ -225,6 +225,7 @@ const App: React.FC = () => {
   const [showFineForm, setShowFineForm] = useState(false);
   const [managingFineSupport, setManagingFineSupport] = useState<Fine | null>(null);
   const [showReportForm, setShowReportForm] = useState(false);
+  const [noveltyTab, setNoveltyTab] = useState<'history' | 'form'>('history');
   const [showWashForm, setShowWashForm] = useState(false);
   const [showCleaningForm, setShowCleaningForm] = useState(false);
   const [showCalibrationForm, setShowCalibrationForm] = useState(false);
@@ -988,9 +989,7 @@ const App: React.FC = () => {
                    </select>
                  </div>
                  <button onClick={() => {
-                    if(activeView === 'novedades') setShowReportForm(true);
-
-
+                    if(activeView === 'novedades') setNoveltyTab(prev => prev === 'form' ? 'history' : 'form');
                     else if(activeView === 'lavados') setShowWashForm(true);
                     else if(activeView === 'limpieza') setShowCleaningForm(true);
                     else if(activeView === 'calibraciones') setShowCalibrationForm(true);
@@ -1465,6 +1464,7 @@ const App: React.FC = () => {
             <NoveltyReportModule 
               vehicles={vehicles} 
               reports={noveltyReports}
+              initialTab={noveltyTab}
               onRefresh={async () => {
                 const updated = await fetchNoveltyReportsFromSheet();
                 setNoveltyReports(updated);

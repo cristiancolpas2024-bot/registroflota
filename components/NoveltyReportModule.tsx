@@ -460,14 +460,22 @@ interface NoveltyReportModuleProps {
   vehicles?: Vehicle[];
   reports?: NoveltyReport[];
   onRefresh?: () => Promise<NoveltyReport[] | void>;
+  initialTab?: 'form' | 'history' | 'docs';
 }
 
 export default function NoveltyReportModule({ 
   vehicles = [], 
   reports = [], 
-  onRefresh 
+  onRefresh,
+  initialTab = 'history'
 }: NoveltyReportModuleProps) {
-  const [activeTab, setActiveTab] = useState<'form' | 'history' | 'docs'>('form');
+  const [activeTab, setActiveTab] = useState<'history' | 'form' | 'docs'>(initialTab);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Form State
   const [fecha, setFecha] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -567,6 +575,12 @@ export default function NoveltyReportModule({
     // Cargar historial al montar el componente para tener los reportes siempre listos
     loadHistory();
   }, []);
+
+  useEffect(() => {
+    if (reports && reports.length > 0) {
+      setInternalReports(reports);
+    }
+  }, [reports]);
 
   // Form Submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -719,6 +733,10 @@ export default function NoveltyReportModule({
   // Filtered and sorted history records (descending by OT or Fecha)
   const filteredHistory = allReports
     .filter(r => {
+      const vMatch = vehicles.find(v => v.plate && r.plate && v.plate.toUpperCase().trim() === r.plate.toUpperCase().trim());
+      const effectiveCd = r.cd || vMatch?.cd || '';
+      const effectiveContratista = r.contratista || vMatch?.contractor || '';
+
       const search = searchTerm.toLowerCase();
       const matchesSearch = 
         (r.plate || '').toLowerCase().includes(search) ||
@@ -726,12 +744,12 @@ export default function NoveltyReportModule({
         (r.conductor || '').toLowerCase().includes(search) ||
         (r.novedad || '').toLowerCase().includes(search) ||
         (r.taller || '').toLowerCase().includes(search) ||
-        (r.cd || '').toLowerCase().includes(search) ||
-        (r.contratista || '').toLowerCase().includes(search);
+        effectiveCd.toLowerCase().includes(search) ||
+        effectiveContratista.toLowerCase().includes(search);
 
       const matchesTaller = filterTaller === 'ALL' || (r.taller || '').toUpperCase() === filterTaller.toUpperCase();
       const matchesEstado = filterEstado === 'ALL' || (r.estado || '').toUpperCase() === filterEstado.toUpperCase();
-      const matchesCd = filterCd === 'ALL' || (r.cd || '').toUpperCase() === filterCd.toUpperCase();
+      const matchesCd = filterCd === 'ALL' || effectiveCd.toUpperCase() === filterCd.toUpperCase();
 
       return matchesSearch && matchesTaller && matchesEstado && matchesCd;
     })
@@ -882,26 +900,67 @@ function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conducto
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20 px-1 md:px-0">
-      {/* HEADER PRINCIPAL */}
+      {/* HEADER PRINCIPAL CON NAVEGACIÓN DE PESTAÑAS */}
       <div className="bg-gradient-to-r from-[#0f172a] via-[#1e293b] to-[#0f172a] rounded-[2rem] p-6 md:p-8 text-white shadow-xl relative overflow-hidden border border-slate-800">
         <div className="absolute -right-10 -top-10 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-500/20 text-indigo-300 rounded-full text-[10px] font-black uppercase tracking-widest border border-indigo-500/30">
-              <Mail size={12} className="text-indigo-400" /> Envío Automático por Correo al Taller
+              <Mail size={12} className="text-indigo-400" /> Control Operativo y Notificaciones a Taller
             </div>
             <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tight flex items-center gap-3">
               <ClipboardList className="text-indigo-400" size={32} />
-              Reporte de Novedades
+              Reporte y Seguimiento de Novedades
             </h1>
+            <p className="text-xs text-slate-400 font-medium">Visualización de fallas activas, historial de reparaciones y cierres de OT</p>
           </div>
 
-          {/* Estado Formulario */}
-          <div className="flex items-center gap-2 bg-slate-900/80 px-4 py-2 rounded-2xl border border-slate-700/60 shadow-inner">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-xs font-black uppercase tracking-wider text-slate-200">
-              Formulario Activo
-            </span>
+          {/* Botones de Navegación de Pestañas */}
+          <div className="flex items-center gap-2 bg-slate-900/90 p-1.5 rounded-2xl border border-slate-700/80 shadow-inner w-full md:w-auto">
+            <button
+              type="button"
+              onClick={() => setActiveTab('history')}
+              className={`flex-1 md:flex-initial px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+                activeTab === 'history'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <ClipboardList size={16} />
+              <span>Ver Novedades</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                activeTab === 'history' ? 'bg-white text-indigo-700' : 'bg-slate-800 text-slate-300'
+              }`}>
+                {allReports.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('form')}
+              className={`flex-1 md:flex-initial px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+                activeTab === 'form'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Plus size={16} />
+              <span>Nuevo Reporte</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('docs')}
+              className={`px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
+                activeTab === 'docs'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+              title="Guía y Apps Script"
+            >
+              <Info size={16} />
+              <span className="hidden sm:inline">Guía</span>
+            </button>
           </div>
         </div>
       </div>
@@ -927,9 +986,20 @@ function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conducto
               {submitSuccess && (
                 <div className="p-4 bg-emerald-50 border-2 border-emerald-200 text-emerald-800 rounded-2xl flex items-start gap-3 animate-in fade-in duration-300">
                   <CheckCircle2 size={24} className="text-emerald-600 shrink-0 mt-0.5" />
-                  <div className="space-y-1">
+                  <div className="space-y-2 flex-1">
                     <p className="text-xs font-black uppercase tracking-wide">¡Reporte Generado con Éxito!</p>
                     <p className="text-xs">{submitSuccess}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSubmitSuccess(null);
+                        setActiveTab('history');
+                      }}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm inline-flex items-center gap-2 mt-1"
+                    >
+                      <ClipboardList size={14} />
+                      <span>Ver en la lista de Novedades</span>
+                    </button>
                   </div>
                   <button 
                     type="button" 
@@ -1309,7 +1379,8 @@ function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conducto
                 <p className="text-xs text-slate-400">Intenta modificar los filtros o registra un nuevo reporte.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+                <div className="overflow-x-auto hidden md:block">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-widest text-slate-500 font-black">
@@ -1326,7 +1397,7 @@ function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conducto
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
                     {filteredHistory.map((item, idx) => (
-                      <tr key={item.ot || `nov-${idx}`} className="hover:bg-slate-50/80 transition-colors">
+                      <tr key={`nov-${item.ot || 'sin-ot'}-${item.plate || 'sin-placa'}-${item.fecha || ''}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
                         <td className="p-4">
                           <span className="font-mono font-black text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-2.5 py-1 rounded-lg text-xs">
                             {item.ot || '—'}
@@ -1341,8 +1412,8 @@ function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conducto
                           </span>
                         </td>
                         <td className="p-4">
-                          <div className="font-bold text-slate-800">{item.cd || '—'}</div>
-                          <div className="text-[10px] text-slate-500">{item.contratista || '—'}</div>
+                          <div className="font-bold text-slate-800">{item.cd || vehicles.find(v => v.plate && item.plate && v.plate.toUpperCase().trim() === item.plate.toUpperCase().trim())?.cd || '—'}</div>
+                          <div className="text-[10px] text-slate-500">{item.contratista || vehicles.find(v => v.plate && item.plate && v.plate.toUpperCase().trim() === item.plate.toUpperCase().trim())?.contractor || '—'}</div>
                         </td>
                         <td className="p-4">
                           <span className="font-black text-slate-900 uppercase text-[11px]">
@@ -1448,6 +1519,125 @@ function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conducto
                   </tbody>
                 </table>
               </div>
+
+              {/* VISTA MÓVIL: Tarjetas claras y verticales para celular */}
+              <div className="block md:hidden divide-y divide-slate-100 bg-slate-50/30">
+                {filteredHistory.map((item, idx) => (
+                  <div key={`mob-nov-${item.ot || 'sin-ot'}-${item.plate || 'sin-placa'}-${item.fecha || ''}-${idx}`} className="p-4 space-y-3 bg-white">
+                    {/* Fila 1: OT y Estado */}
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-black text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2.5 py-1 rounded-lg text-xs">
+                        {item.ot || '—'}
+                      </span>
+                      <span 
+                        className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider inline-flex items-center gap-1 shadow-xs"
+                        style={{
+                          backgroundColor: (item.estado || '').toUpperCase() === 'CERRADO' ? '#DCFCE7' : '#FEF3C7',
+                          color: (item.estado || '').toUpperCase() === 'CERRADO' ? '#16A34A' : '#D97706',
+                          borderColor: (item.estado || '').toUpperCase() === 'CERRADO' ? '#86EFAC' : '#FCD34D',
+                          borderWidth: '1px'
+                        }}
+                      >
+                        <span 
+                          className="w-1.5 h-1.5 rounded-full" 
+                          style={{
+                            backgroundColor: (item.estado || '').toUpperCase() === 'CERRADO' ? '#16A34A' : '#F2B705'
+                          }}
+                        />
+                        {(item.estado || 'ABIERTO').toUpperCase()}
+                      </span>
+                    </div>
+
+                    {/* Fila 2: Placa, Fecha y Taller */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="bg-slate-900 px-2.5 py-1 rounded text-white font-mono font-black text-xs shadow-xs">
+                          {item.plate}
+                        </span>
+                        <span className="font-bold text-slate-500 text-xs">{item.fecha}</span>
+                      </div>
+                      <span className="font-black text-slate-800 text-[11px] uppercase bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-md">
+                        {item.taller}
+                      </span>
+                    </div>
+
+                    {/* Fila 3: CD y Contratista */}
+                    <div className="text-[11px] text-slate-500 font-bold flex items-center gap-1.5">
+                      <span className="text-slate-800">{item.cd || vehicles.find(v => v.plate && item.plate && v.plate.toUpperCase().trim() === item.plate.toUpperCase().trim())?.cd || 'CD S/N'}</span>
+                      <span>•</span>
+                      <span>{item.contratista || vehicles.find(v => v.plate && item.plate && v.plate.toUpperCase().trim() === item.plate.toUpperCase().trim())?.contractor || 'Sin Contratista'}</span>
+                      {item.conductor && (
+                        <>
+                          <span>•</span>
+                          <span className="italic text-slate-600">Cond: {item.conductor}</span>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Fila 4: Descripción de la novedad */}
+                    <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl text-xs text-slate-800 font-medium">
+                      {item.novedad}
+                    </div>
+
+                    {/* Fila 5: Evidencias y Acción */}
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="flex items-center gap-1.5">
+                        {item.evidenciaReporte1 && (
+                          <button
+                            type="button"
+                            onClick={() => setViewingImage({ url: item.evidenciaReporte1!, title: `${item.ot} - Evidencia 1` })}
+                            className="px-2.5 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-black rounded-lg hover:bg-indigo-100 transition-colors flex items-center gap-1"
+                          >
+                            📷 Foto 1
+                          </button>
+                        )}
+                        {item.evidenciaReporte2 && (
+                          <button
+                            type="button"
+                            onClick={() => setViewingImage({ url: item.evidenciaReporte2!, title: `${item.ot} - Evidencia 2` })}
+                            className="px-2.5 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-black rounded-lg hover:bg-indigo-100 transition-colors flex items-center gap-1"
+                          >
+                            📷 Foto 2
+                          </button>
+                        )}
+                        {!item.evidenciaReporte1 && !item.evidenciaReporte2 && (
+                          <span className="text-[10px] text-slate-400 italic">Sin fotos adjuntas</span>
+                        )}
+                      </div>
+
+                      {(item.estado || '').toUpperCase() === 'ABIERTO' ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setClosingRecord(item);
+                            setCierreEvidencia1('');
+                            setCierreEvidencia2('');
+                          }}
+                          className="px-3.5 py-1.5 bg-slate-900 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors shadow-sm"
+                        >
+                          Cerrar Novedad
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                            <CheckCircle2 size={13} /> Resuelto
+                          </span>
+                          {item.evidenciaCierre1 && (
+                            <button
+                              type="button"
+                              onClick={() => setViewingImage({ url: item.evidenciaCierre1, title: `${item.ot} - Cierre` })}
+                              className="text-[9px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-black hover:bg-emerald-100"
+                            >
+                              Foto Cierre
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              </>
             )}
           </div>
         </div>

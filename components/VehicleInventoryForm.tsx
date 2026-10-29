@@ -34,7 +34,10 @@ interface VehicleInventoryFormProps {
 export const INSPECTORES_INVENTARIO = [
   'Edwin Correa',
   'Leonardo Rodriguez',
-  'David Reales'
+  'David Reales',
+  'Jorge Chacon',
+  'Jorge Fandiño',
+  'Israel Guerrero'
 ] as const;
 
 // Convierte 'YYYY-MM-DD' a 'dd/mm/yyyy'
@@ -280,7 +283,7 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
     }
 
     if (!nombre) {
-      setErrorMessage('Por favor selecciona el NOMBRE de quien registra (Edwin Correa, Leonardo Rodriguez o David Reales).');
+      setErrorMessage('Por favor selecciona el NOMBRE de quien registra.');
       return;
     }
 

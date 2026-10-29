@@ -2424,8 +2424,10 @@ export const submitNoveltyClose = async (data: {
 
 export const fetchNoveltyReportsFromSheet = async (): Promise<NoveltyReport[]> => {
   const docId = NOVEDADES_OP_DOC_ID;
-  const GID = NOVEDADES_OP_GID; // 1190843304
-  const map = (rows: any[][]): NoveltyReport[] =>
+  const GID_OP = NOVEDADES_OP_GID; // 1190843304 (Hoja NOVEDADES operativa)
+  const GID_HIST = NOVEDADES_GID; // 1789987673 (Hoja NOVEDADES histórica)
+
+  const mapOperational = (rows: any[][]): NoveltyReport[] =>
     rows.slice(1)
       .filter(r => r && (cleanSheetValue(r[0]) || cleanSheetValue(r[4]))) // tiene OT o placa
       .map((r): NoveltyReport => ({
@@ -2446,31 +2448,109 @@ export const fetchNoveltyReportsFromSheet = async (): Promise<NoveltyReport[]> =
         fotoTacos: cleanSheetValue(r[17]),
       }));
 
-  // 1. Intentar Apps Script
+  const mapHistorical = (rows: any[][]): NoveltyReport[] =>
+    rows.slice(1)
+      .filter(r => r && (cleanSheetValue(r[0]) || cleanSheetValue(r[4])))
+      .map((r): NoveltyReport => {
+        const estadoRaw = cleanSheetValue(r[11]).toUpperCase();
+        const estado = (estadoRaw === 'COMPLETADOS' || estadoRaw === 'CERRADO') ? 'CERRADO' : 'ABIERTO';
+        return {
+          ot: cleanSheetValue(r[0]),
+          fecha: cleanSheetValue(r[1]),
+          cd: cleanSheetValue(r[2]),
+          contratista: cleanSheetValue(r[3]),
+          plate: cleanSheetValue(r[4]),
+          conductor: cleanSheetValue(r[5]) || 'REPORTE OPERATIVO',
+          novedad: cleanSheetValue(r[8]),
+          taller: cleanSheetValue(r[18]) || cleanSheetValue(r[17]) || 'GENERAL',
+          evidenciaReporte1: cleanSheetValue(r[10]) || cleanSheetValue(r[7]),
+          evidenciaReporte2: cleanSheetValue(r[12]),
+          estado: estado,
+          evidenciaCierre1: cleanSheetValue(r[14]),
+          evidenciaCierre2: cleanSheetValue(r[15]),
+        };
+      });
+
+  let operationalReports: NoveltyReport[] = [];
+  let historicalReports: NoveltyReport[] = [];
+
+  // 1. Carga directa e instantánea vía CSV de la hoja operativa
   try {
-    let rows = await fetchDataFromGAS(docId, 'NOVEDADES', OPERATIONAL_SCRIPT_URL);
-    if (!rows || rows.length < 2) {
-      rows = await fetchDataFromGAS(docId, 'NOVEDADES', GOOGLE_SCRIPT_WEB_APP_URL);
+    const urlOp = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${GID_OP}${getCacheBuster()}`;
+    const respOp = await fetch(urlOp, { mode: 'cors', credentials: 'omit' });
+    const csvOp = await respOp.text();
+    if (csvOp && !csvOp.includes('<!DOCTYPE html')) {
+      const parsedOp = Papa.parse(csvOp, { skipEmptyLines: true });
+      if (parsedOp.data && parsedOp.data.length >= 2) {
+        operationalReports = mapOperational(parsedOp.data as any[][]);
+      }
     }
-    if (rows && rows.length >= 2) return map(rows);
-  } catch (e) { 
-    console.warn("GAS fetch novelty reports failed, trying fallbacks:", e);
+  } catch (e) {
+    console.warn("Error leyendo CSV de novedades operativas:", e);
   }
 
-  // 2. Fallback CSV
-  try {
-    const url = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${GID}${getCacheBuster()}`;
-    const resp = await fetch(url, { mode: 'cors', credentials: 'omit' });
-    const csv = await resp.text();
-    if (csv && !csv.includes('<!DOCTYPE html')) {
-      const parsed = Papa.parse(csv, { skipEmptyLines: true });
-      return map(parsed.data as any[][]);
+  // Si falló el CSV operativo, consultar Apps Script inmediatamente
+  if (operationalReports.length === 0) {
+    try {
+      let rows = await fetchDataFromGAS(docId, 'NOVEDADES', OPERATIONAL_SCRIPT_URL);
+      if (!rows || rows.length < 2) {
+        rows = await fetchDataFromGAS(docId, 'NOVEDADES', GOOGLE_SCRIPT_WEB_APP_URL);
+      }
+      if (rows && rows.length >= 2) {
+        operationalReports = mapOperational(rows);
+      }
+    } catch (e) {
+      console.warn("Fallback GAS para novedades operativas falló:", e);
     }
-  } catch (e) { 
-    console.warn("Error fetching novelty reports CSV:", e);
   }
 
-  return [];
+  // 2. Carga directa de la hoja histórica para consolidar todas las novedades
+  try {
+    const urlHist = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${GID_HIST}${getCacheBuster()}`;
+    const respHist = await fetch(urlHist, { mode: 'cors', credentials: 'omit' });
+    const csvHist = await respHist.text();
+    if (csvHist && !csvHist.includes('<!DOCTYPE html')) {
+      const parsedHist = Papa.parse(csvHist, { skipEmptyLines: true });
+      if (parsedHist.data && parsedHist.data.length >= 2) {
+        historicalReports = mapHistorical(parsedHist.data as any[][]);
+      }
+    }
+  } catch (e) {
+    console.warn("Error leyendo CSV de novedades históricas:", e);
+  }
+
+  // Si falló el CSV histórico, consultar Apps Script con la hoja 'REPORTE'
+  if (historicalReports.length === 0) {
+    try {
+      let rows = await fetchDataFromGAS(docId, 'REPORTE', OPERATIONAL_SCRIPT_URL);
+      if (!rows || rows.length < 2) {
+        rows = await fetchDataFromGAS(docId, 'REPORTE', GOOGLE_SCRIPT_WEB_APP_URL);
+      }
+      if (rows && rows.length >= 2) {
+        historicalReports = mapHistorical(rows);
+      }
+    } catch (e) {
+      console.warn("Fallback GAS para novedades históricas falló:", e);
+    }
+  }
+
+  // 3. Consolidar deduplicando por OT o por Placa + Fecha
+  const seenOts = new Set<string>();
+  const combined: NoveltyReport[] = [];
+
+  for (const item of operationalReports) {
+    if (item.ot) seenOts.add(item.ot.toUpperCase().trim());
+    combined.push(item);
+  }
+
+  for (const item of historicalReports) {
+    const key = (item.ot || '').toUpperCase().trim();
+    if (key && seenOts.has(key)) continue;
+    if (key) seenOts.add(key);
+    combined.push(item);
+  }
+
+  return combined;
 };
 
 export const submitVehicleInventory = async (data: VehicleInventoryPayload | any): Promise<boolean> => {
