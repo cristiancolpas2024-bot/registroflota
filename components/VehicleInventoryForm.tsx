@@ -140,7 +140,7 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
   }, []);
 
   const failedItems = useMemo(() => {
-    return queueItems.filter((item) => (item.retryCount || 0) >= 5);
+    return queueItems.filter((item) => item.status === 'failed' || (item.retryCount || 0) >= 1);
   }, [queueItems]);
 
   const isSyncing = useMemo(() => {
@@ -355,11 +355,11 @@ export const VehicleInventoryForm: React.FC<VehicleInventoryFormProps> = ({
       setShowSuccessOverlay(true);
       setIsOverlayFadingOut(false);
 
-      // Programar cierre automático a los 4 segundos con fade-out de 300ms
+      // Programar cierre automático a los 2 segundos con fade-out de 300ms
       if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
       autoCloseTimerRef.current = setTimeout(() => {
         closeOverlay();
-      }, 4000);
+      }, 2000);
 
       // 2. Guardar en cola local IndexedDB en segundo plano
       enqueueInventory({

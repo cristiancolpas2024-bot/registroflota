@@ -34,14 +34,32 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  if (!e || !e.postData || !e.postData.contents) return output("error", "No hay datos en el postBody");
+  
+  var req;
+  try {
+    req = JSON.parse(e.postData.contents);
+  } catch (err) {
+    return output("error", "JSON inválido: " + err.toString());
+  }
+
+  var d = req.data || {};
+  var m = req.method;
+
+  // Subida de imágenes a Drive: NO requiere bloqueo de hoja de cálculo.
+  // Al no bloquear, permite subidas 100% paralelas ultrarrápidas sin esperas.
+  if (m === 'UPLOAD_IMAGE') {
+    try {
+      var url = sImg(d.base64, d.name);
+      return output("success", url);
+    } catch (errImg) {
+      return output("error", "Error subiendo imagen a Drive: " + errImg.toString());
+    }
+  }
+
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(20000); // Aumentado a 20 segundos
-    if (!e.postData.contents) return output("error", "No hay datos en el postBody");
-    
-    var req = JSON.parse(e.postData.contents);
-    var d = req.data;
-    var m = req.method;
+    lock.waitLock(5000); // 5 segundos es más que suficiente para operaciones de hoja
     
     log("Method: " + m + " - Data: " + JSON.stringify(d).substring(0, 500));
 
@@ -678,11 +696,6 @@ function doPost(e) {
         if (lock.hasLock()) lock.releaseLock();
         return output("success", "Novedad " + otBuscada + " cerrada correctamente.");
       }
-      else if (m === 'UPLOAD_IMAGE') {
-        var url = sImg(d.base64, d.name);
-        if (lock.hasLock()) lock.releaseLock();
-        return output("success", url);
-      }
       else if (m === 'POST_INVENTARIO' || m === 'POST_INVENTARIO_DIARIO') {
         var docId = d.docId || ID_HOJA;
         var ss = SpreadsheetApp.openById(docId);
@@ -698,7 +711,8 @@ function doPost(e) {
         // Verificar si este ID ya existe en la columna 16 para evitar duplicados en reintentos
         if (regId && s.getLastRow() > 1) {
           var lastRow = s.getLastRow();
-          var idValues = s.getRange(2, 16, lastRow - 1, 1).getValues();
+          var scanRows = Math.min(50, lastRow - 1);
+          var idValues = s.getRange(lastRow - scanRows + 1, 16, scanRows, 1).getValues();
           for (var i = 0; i < idValues.length; i++) {
             if (String(idValues[i][0]).trim() === regId) {
               if (lock.hasLock()) lock.releaseLock();
@@ -753,8 +767,13 @@ function doPost(e) {
         var urlNov3 = (d.novedad3 || d.fotoNovedad3) ? sImg(d.novedad3 || d.fotoNovedad3, "INV_NOV3_" + placa) : "";
 
         var observacionVal = d.observacion || "";
+        var estadoTacosVal = (d.estadoTacos || "").toString().toUpperCase().trim();
+        var urlTacos = (d.fotoTacos || d.fotoTaco) ? sImg(d.fotoTacos || d.fotoTaco, "INV_TACOS_" + placa) : "";
 
-        // Escribir exactamente UNA fila con los 15 valores en orden (0 a 14) + columna oculta ID (15)
+        // Escribir exactamente UNA fila con los 18 valores en orden según encabezados de la hoja:
+        // A: FECHA | B: PLACA | C: NOMBRE | D: Foto Frontal | E: Foto Lateral Izq. | F: Foto Lateral Der.
+        // G: Foto Trasera | H: carretilla | I: conos | J: estribo Izq. | K: estribo Der.
+        // L: novedad1 | M: novedad2 | N: novedad3 | O: observacion | P: ID_REGISTRO | Q: ESTADO TACOS | R: TACOS
         s.appendRow([
           fecha,            // 0: FECHA (dd/mm/yyyy)
           placa,            // 1: PLACA
@@ -771,7 +790,9 @@ function doPost(e) {
           urlNov2,          // 12: novedad2
           urlNov3,          // 13: novedad3
           observacionVal,   // 14: observacion
-          regId             // 15: ID único (columna oculta)
+          regId,            // 15: ID único (columna P)
+          estadoTacosVal,   // 16: ESTADO TACOS (columna Q)
+          urlTacos          // 17: TACOS (columna R)
         ]);
 
         if (lock.hasLock()) lock.releaseLock();

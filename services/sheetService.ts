@@ -1658,29 +1658,38 @@ export const uploadImageToDrive = async (base64Data: string, fileName: string): 
   };
 
   const urlsToTry = [
-    OPERATIONAL_SCRIPT_URL,
-    GOOGLE_SCRIPT_AUDIT_URL,
-    GOOGLE_SCRIPT_WEB_APP_URL
+    OPERATIONAL_SCRIPT_URL
   ];
 
   let lastError: any = null;
   for (const url of urlsToTry) {
     if (!url) continue;
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+
       const response = await fetch(url, {
         method: 'POST',
         mode: 'cors',
         headers: {
           'Content-Type': 'text/plain',
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
+
       const result = await response.json();
-      if (result && result.status === 'success') {
+      if (
+        result && 
+        result.status === 'success' && 
+        typeof result.message === 'string' && 
+        result.message.startsWith('http')
+      ) {
         return result.message; // El link de Drive viene en el campo message
       }
-      lastError = new Error(result?.message || 'Error al subir a Drive');
-    } catch (err) {
+      lastError = new Error(result?.message || 'Error al subir a Drive (enlace no válido)');
+    } catch (err: any) {
       lastError = err;
     }
   }
@@ -2556,29 +2565,30 @@ export const fetchNoveltyReportsFromSheet = async (): Promise<NoveltyReport[]> =
 export const submitVehicleInventory = async (data: VehicleInventoryPayload | any): Promise<boolean> => {
   const payload = {
     method: 'POST_INVENTARIO',
-    data: { ...data, docId: '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU', sheetName: 'INVENTARIO DIARIO' }
+    data: { 
+      ...data, 
+      nombre: data.nombre || data.inspector || '',
+      inspector: data.inspector || data.nombre || '',
+      carretilla: data.carretilla !== undefined ? Number(data.carretilla) : Number(data.carretillas || 0),
+      carretillas: data.carretilla !== undefined ? Number(data.carretilla) : Number(data.carretillas || 0),
+      docId: '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU', 
+      sheetName: 'INVENTARIO DIARIO' 
+    }
   };
   try {
     const result = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, true);
-    if (result && typeof result === 'object' && (result as any).status === 'success') return true;
+    if (result && typeof result === 'object' && (result as any).status === 'success') {
+      return true;
+    }
     if (result && typeof result === 'object' && (result as any).status === 'error') {
       const errMsg = String((result as any).message || '');
       console.error('Error Apps Script al guardar inventario:', errMsg);
-      if (errMsg.toLowerCase().includes('no soportado')) {
-        console.warn('Método no soportado en script operativo, probando script principal...');
-        try {
-          const res2 = await sendToGAS(payload, GOOGLE_SCRIPT_WEB_APP_URL, true);
-          if (res2 && typeof res2 === 'object' && (res2 as any).status === 'success') return true;
-        } catch (e2) {
-          console.warn('Reintento en script principal falló:', e2);
-        }
-      }
       return false;
     }
     if (result === true) return true;
     return false;
   } catch (e) {
-    console.warn('Inventario error de red, intentando fallback directo:', e);
+    console.warn('Inventario error de red en modo CORS, intentando fallback directo no-cors:', e);
     try {
       const ok = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, false);
       if (ok && typeof ok === 'object' && (ok as any).status === 'success') return true;

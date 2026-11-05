@@ -165,7 +165,7 @@ async function uploadPhotosInParallel(
 ): Promise<Record<string, string>> {
   const plateClean = item.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
   
-  // Lista de fotos a procesar
+  // Lista de fotos a procesar (incluyendo fotos de tacos y estribos)
   const photos: Array<{ key: string; name: string; value?: string }> = [
     { key: 'fotoFrontal', name: `INV_FRONTAL_${plateClean}`, value: item.fotoFrontal },
     { key: 'fotoLateralIzq', name: `INV_LATIZQ_${plateClean}`, value: item.fotoLateralIzq },
@@ -173,6 +173,7 @@ async function uploadPhotosInParallel(
     { key: 'fotoTrasera', name: `INV_TRASERA_${plateClean}`, value: item.fotoTrasera },
     { key: 'estriboIzq', name: `INV_ESTRIBO_IZQ_${plateClean}`, value: item.estriboIzq },
     { key: 'estriboDer', name: `INV_ESTRIBO_DER_${plateClean}`, value: item.estriboDer },
+    { key: 'fotoTacos', name: `INV_TACOS_${plateClean}`, value: item.fotoTacos },
     { key: 'novedad1', name: `INV_NOV1_${plateClean}`, value: item.novedad1 },
     { key: 'novedad2', name: `INV_NOV2_${plateClean}`, value: item.novedad2 },
     { key: 'novedad3', name: `INV_NOV3_${plateClean}`, value: item.novedad3 },
@@ -200,34 +201,29 @@ async function uploadPhotosInParallel(
     return currentUploaded;
   }
 
-  // Ejecución en paralelo con concurrencia máxima 3
-  const MAX_CONCURRENCY = 3;
-  let cursor = 0;
+  // MEJORA 1: Subir todas las fotos pendientes EN PARALELO con Promise.all
   let hasError = false;
   let firstErrorMessage = '';
 
-  const runWorker = async () => {
-    while (cursor < pendingPhotos.length && !hasError) {
-      const idx = cursor++;
-      const itemToUpload = pendingPhotos[idx];
+  await Promise.all(
+    pendingPhotos.map(async (itemToUpload) => {
       try {
         const driveUrl = await uploadImageToDrive(itemToUpload.base64, itemToUpload.name);
-        currentUploaded[itemToUpload.key as keyof typeof currentUploaded] = driveUrl;
-        await onPhotoUploaded(itemToUpload.key, driveUrl);
+        if (driveUrl && driveUrl.startsWith('http')) {
+          currentUploaded[itemToUpload.key as keyof typeof currentUploaded] = driveUrl;
+          await onPhotoUploaded(itemToUpload.key, driveUrl);
+        }
       } catch (err: any) {
+        console.warn(`Error al subir foto ${itemToUpload.key}:`, err);
         hasError = true;
         firstErrorMessage = err?.message || 'Error al subir foto a Drive';
         throw err;
       }
-    }
-  };
-
-  const poolSize = Math.min(MAX_CONCURRENCY, pendingPhotos.length);
-  const workers = Array.from({ length: poolSize }, () => runWorker());
-  await Promise.all(workers);
+    })
+  );
 
   if (hasError) {
-    throw new Error(firstErrorMessage || 'Error en subida paralela de fotos');
+    throw new Error(firstErrorMessage || 'Error en subida de fotos');
   }
 
   return currentUploaded;
@@ -278,16 +274,18 @@ export const processQueue = async (): Promise<void> => {
           fecha: item.fecha,
           plate: item.plate,
           nombre: item.nombre,
+          inspector: item.nombre, // Compatibilidad con versiones de Apps Script que busquen inspector
           fotoFrontal: driveLinks.fotoFrontal || '',
           fotoLateralIzq: driveLinks.fotoLateralIzq || '',
           fotoLateralDer: driveLinks.fotoLateralDer || '',
           fotoTrasera: driveLinks.fotoTrasera || '',
           carretilla: item.carretilla,
+          carretillas: item.carretilla,
           conos: item.conos,
           estriboIzq: driveLinks.estriboIzq || '',
           estriboDer: driveLinks.estriboDer || '',
           estadoTacos: item.estadoTacos || '',
-          fotoTacos: item.fotoTacos || '',
+          fotoTacos: driveLinks.fotoTacos || (item.fotoTacos?.startsWith('http') ? item.fotoTacos : '') || '',
           novedad1: driveLinks.novedad1 || '',
           novedad2: driveLinks.novedad2 || '',
           novedad3: driveLinks.novedad3 || '',
